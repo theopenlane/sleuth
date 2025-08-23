@@ -1,0 +1,95 @@
+version: '3'
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list-all
+
+  build:
+    desc: Build the Sleuth service
+    cmds:
+      - go build -o bin/sleuth main.go
+
+  run:
+    desc: Run the Sleuth service
+    cmds:
+      - go run main.go
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v ./...
+
+  test:short:
+    desc: Run tests in short mode (skip integration tests)
+    cmds:
+      - go test -short -v ./...
+
+  test:coverage:
+    desc: Run tests with coverage
+    cmds:
+      - go test -v -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+
+  test:race:
+    desc: Run tests with race detection
+    cmds:
+      - go test -race -v ./...
+
+  test:benchmark:
+    desc: Run benchmark tests
+    cmds:
+      - go test -bench=. -benchmem ./...
+
+  lint:
+    desc: Run linters
+    cmds:
+      - golangci-lint run
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  deps:
+    desc: Download dependencies
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  docker:build:
+    desc: Build Docker image
+    cmds:
+      - docker build -t sleuth:latest .
+
+  docker:run:
+    desc: Run Sleuth in Docker
+    cmds:
+      - docker run -p 8080:8080 sleuth:latest
+
+  docs:
+    desc: Generate OpenAPI documentation
+    cmds:
+      - go run github.com/swaggo/swag/cmd/swag@latest init --generalInfo internal/api/handler.go --output docs/
+
+  docs:serve:
+    desc: Serve OpenAPI documentation locally
+    deps: [docs]
+    vars:
+      PORT: '{{default "8080" .SLEUTH_PORT}}'
+    cmds:
+      - echo "OpenAPI docs available at http://localhost:{{.PORT}}/swagger/"
+      - echo "OpenAPI spec available at http://localhost:{{.PORT}}/swagger/doc.json"
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf bin/
+      - rm -rf docs/
+      - rm -f coverage.out coverage.html
