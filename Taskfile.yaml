@@ -73,6 +73,18 @@ tasks:
     cmds:
       - docker run -p 8080:8080 sleuth:latest
 
+  scan:
+    desc: Build container and scan a domain
+    deps: [docker:build]
+    vars:
+      DOMAIN: '{{default "theopenlane.io" .DOMAIN}}'
+    cmds:
+      - docker run -d --rm -p 8080:8080 --name sleuth-scan sleuth:latest
+      - sleep 2
+      - >
+        curl -s -X POST -H "Content-Type: application/json" -d '{"domain":"{{.DOMAIN}}"}' http://localhost:8080/api/scan
+      - docker stop sleuth-scan >/dev/null
+
   docs:
     desc: Generate OpenAPI documentation
     cmds:

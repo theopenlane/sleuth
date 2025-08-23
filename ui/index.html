@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Sleuth Scan</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    input { padding: 0.5rem; }
+    button { padding: 0.5rem 1rem; margin-left: 0.5rem; }
+    pre { background: #f0f0f0; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Sleuth Scan</h1>
+  <p>
+    <input id="domain" type="text" placeholder="example.com" />
+    <button id="scan">Scan</button>
+  </p>
+  <pre id="output"></pre>
+  <script>
+    document.getElementById('scan').addEventListener('click', async () => {
+      const domain = document.getElementById('domain').value;
+      const res = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain })
+      });
+      const data = await res.json();
+      document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+    });
+  </script>
+</body>
+</html>
