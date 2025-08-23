@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 // Info contains parsed domain information
@@ -27,7 +29,7 @@ func Parse(input string) (*Info, error) {
 
 	// Clean up domain
 	input = strings.ToLower(strings.TrimSpace(input))
-	
+
 	// Remove protocol if present
 	if strings.Contains(input, "://") {
 		u, err := url.Parse(input)
@@ -47,47 +49,24 @@ func Parse(input string) (*Info, error) {
 		return nil, fmt.Errorf("invalid domain format")
 	}
 
-	parts := strings.Split(input, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid domain format")
+	etld1, err := publicsuffix.EffectiveTLDPlusOne(input)
+	if err != nil {
+		return nil, fmt.Errorf("invalid domain format: %w", err)
+	}
+
+	tld, _ := publicsuffix.PublicSuffix(input)
+	sld := strings.TrimSuffix(etld1, "."+tld)
+	subdomain := ""
+	if etld1 != input {
+		subdomain = strings.TrimSuffix(input, "."+etld1)
 	}
 
 	info := &Info{
-		Domain: input,
-		TLD:    parts[len(parts)-1],
-	}
-
-	// Handle common TLDs with SLDs (e.g., .co.uk, .com.au)
-	if len(parts) >= 3 && isPublicSuffix(parts[len(parts)-2] + "." + parts[len(parts)-1]) {
-		info.TLD = parts[len(parts)-2] + "." + parts[len(parts)-1]
-		info.SLD = parts[len(parts)-3]
-		if len(parts) > 3 {
-			info.Subdomain = strings.Join(parts[:len(parts)-3], ".")
-		}
-	} else {
-		info.SLD = parts[len(parts)-2]
-		if len(parts) > 2 {
-			info.Subdomain = strings.Join(parts[:len(parts)-2], ".")
-		}
+		Domain:    input,
+		Subdomain: subdomain,
+		TLD:       tld,
+		SLD:       sld,
 	}
 
 	return info, nil
-}
-
-// isPublicSuffix checks if a domain suffix is a known public suffix
-func isPublicSuffix(suffix string) bool {
-	// Simplified list of common public suffixes
-	publicSuffixes := map[string]bool{
-		"co.uk":  true,
-		"com.au": true,
-		"co.nz":  true,
-		"co.za":  true,
-		"com.br": true,
-		"co.in":  true,
-		"net.au": true,
-		"org.uk": true,
-		"ac.uk":  true,
-		"gov.uk": true,
-	}
-	return publicSuffixes[suffix]
 }

@@ -47,11 +47,11 @@ func (s *Scanner) performHTTPAnalysis(ctx context.Context, domain string) *types
 		url := fmt.Sprintf("%s://%s", protocol, domain)
 		req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Sleuth/1.0)")
-		
+
 		resp, err = client.Do(req)
 		if err == nil {
 			finalURL = resp.Request.URL.String()
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			break
 		}
 	}
@@ -168,12 +168,12 @@ func (s *Scanner) analyzeSecurityHeaders(resp *http.Response, result *types.Chec
 		if value != "" {
 			presentHeaders[header] = value
 		}
-		
+
 		if ok, issue := config.Check(value); !ok {
 			if config.Required {
 				missingCount++
 			}
-			
+
 			result.Findings = append(result.Findings, types.Finding{
 				Severity:    config.Severity,
 				Type:        "security_header",
@@ -184,7 +184,7 @@ func (s *Scanner) analyzeSecurityHeaders(resp *http.Response, result *types.Chec
 	}
 
 	result.Metadata["security_headers"] = presentHeaders
-	result.Metadata["security_score"] = fmt.Sprintf("%d/%d headers configured", 
+	result.Metadata["security_score"] = fmt.Sprintf("%d/%d headers configured",
 		len(presentHeaders), len(headers))
 
 	if missingCount > 2 {
@@ -195,7 +195,7 @@ func (s *Scanner) analyzeSecurityHeaders(resp *http.Response, result *types.Chec
 // analyzeTLSConfiguration analyzes TLS/SSL configuration
 func (s *Scanner) analyzeTLSConfiguration(tlsState *tls.ConnectionState, result *types.CheckResult) {
 	tlsInfo := make(map[string]interface{})
-	
+
 	// TLS version analysis
 	tlsVersion := "Unknown"
 	switch tlsState.Version {
@@ -220,21 +220,21 @@ func (s *Scanner) analyzeTLSConfiguration(tlsState *tls.ConnectionState, result 
 	case tls.VersionTLS13:
 		tlsVersion = "TLS 1.3"
 	}
-	
+
 	tlsInfo["version"] = tlsVersion
 	tlsInfo["cipher_suite"] = tls.CipherSuiteName(tlsState.CipherSuite)
-	
+
 	// Certificate analysis
 	if len(tlsState.PeerCertificates) > 0 {
 		cert := tlsState.PeerCertificates[0]
 		certInfo := map[string]interface{}{
-			"subject":     cert.Subject.String(),
-			"issuer":      cert.Issuer.String(),
-			"not_before":  cert.NotBefore.Format(time.RFC3339),
-			"not_after":   cert.NotAfter.Format(time.RFC3339),
-			"dns_names":   cert.DNSNames,
+			"subject":    cert.Subject.String(),
+			"issuer":     cert.Issuer.String(),
+			"not_before": cert.NotBefore.Format(time.RFC3339),
+			"not_after":  cert.NotAfter.Format(time.RFC3339),
+			"dns_names":  cert.DNSNames,
 		}
-		
+
 		// Check certificate expiration
 		daysUntilExpiry := int(time.Until(cert.NotAfter).Hours() / 24)
 		if daysUntilExpiry < 0 {
@@ -252,28 +252,28 @@ func (s *Scanner) analyzeTLSConfiguration(tlsState *tls.ConnectionState, result 
 				Details:     fmt.Sprintf("Expires in %d days", daysUntilExpiry),
 			})
 		}
-		
+
 		tlsInfo["certificate"] = certInfo
 	}
-	
+
 	result.Metadata["tls"] = tlsInfo
 }
 
 // analyzeResponseBody analyzes the HTTP response body for issues
 func (s *Scanner) analyzeResponseBody(body string, result *types.CheckResult) {
 	bodyLower := strings.ToLower(body)
-	
+
 	// Check for error pages that might reveal information
 	errorPatterns := map[string]string{
-		"stack trace":     "Stack trace exposed",
-		"database error":  "Database error exposed",
-		"php warning":     "PHP warning exposed",
-		"php error":       "PHP error exposed",
-		"sql syntax":      "SQL error exposed",
-		"apache/":         "Apache version disclosed",
-		"nginx/":          "Nginx version disclosed",
+		"stack trace":    "Stack trace exposed",
+		"database error": "Database error exposed",
+		"php warning":    "PHP warning exposed",
+		"php error":      "PHP error exposed",
+		"sql syntax":     "SQL error exposed",
+		"apache/":        "Apache version disclosed",
+		"nginx/":         "Nginx version disclosed",
 	}
-	
+
 	for pattern, description := range errorPatterns {
 		if strings.Contains(bodyLower, pattern) {
 			result.Findings = append(result.Findings, types.Finding{
@@ -289,32 +289,32 @@ func (s *Scanner) analyzeResponseBody(body string, result *types.CheckResult) {
 // checkExposedFiles checks for commonly exposed sensitive files
 func (s *Scanner) checkExposedFiles(ctx context.Context, domain string, client *http.Client, result *types.CheckResult) {
 	files := map[string]string{
-		"/.env":             "Environment configuration file",
-		"/.git/config":      "Git configuration file",
-		"/robots.txt":       "Robots.txt file",
-		"/sitemap.xml":      "XML sitemap",
+		"/.env":                     "Environment configuration file",
+		"/.git/config":              "Git configuration file",
+		"/robots.txt":               "Robots.txt file",
+		"/sitemap.xml":              "XML sitemap",
 		"/.well-known/security.txt": "Security policy file",
-		"/wp-config.php":    "WordPress configuration",
-		"/config.php":       "PHP configuration file",
-		"/phpmyadmin":       "phpMyAdmin interface",
-		"/admin":            "Admin interface",
-		"/backup":           "Backup directory",
+		"/wp-config.php":            "WordPress configuration",
+		"/config.php":               "PHP configuration file",
+		"/phpmyadmin":               "phpMyAdmin interface",
+		"/admin":                    "Admin interface",
+		"/backup":                   "Backup directory",
 	}
 
 	for path, description := range files {
 		url := fmt.Sprintf("https://%s%s", domain, path)
 		req, _ := http.NewRequestWithContext(ctx, "HEAD", url, nil)
 		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Sleuth/1.0)")
-		
+
 		if resp, err := client.Do(req); err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == 200 {
 				severity := "info"
-				if strings.Contains(path, ".env") || strings.Contains(path, ".git") || 
-				   strings.Contains(path, "config") {
+				if strings.Contains(path, ".env") || strings.Contains(path, ".git") ||
+					strings.Contains(path, "config") {
 					severity = "high"
 				}
-				
+
 				result.Findings = append(result.Findings, types.Finding{
 					Severity:    severity,
 					Type:        "exposed_file",
