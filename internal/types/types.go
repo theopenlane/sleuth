@@ -20,9 +20,11 @@ type Finding struct {
 // ScanResult contains all results from scanning a domain
 type ScanResult struct {
 	Domain      string         `json:"domain" example:"example.com" description:"The domain that was scanned"`
+	Email       string         `json:"email,omitempty" example:"user@example.com" description:"Email address if provided"`
 	ScannedAt   string         `json:"scanned_at" example:"1705316400" description:"Unix timestamp when scan was performed"`
 	Results     []CheckResult  `json:"results" description:"Results from all security and technology checks"`
-	DomainInfo  *DomainInfo    `json:"domain_info" description:"Parsed domain information"`
+	DomainInfo  *DomainInfo    `json:"domain_info,omitempty" description:"Parsed domain information"`
+	IntelScore  interface{}    `json:"intel_score,omitempty" description:"Threat intelligence score if email was checked"`
 }
 
 // DomainInfo contains parsed domain information

@@ -55,7 +55,7 @@ func TestBuildNucleiArgs(t *testing.T) {
 	// Check basic arguments
 	expectedArgs := map[string]bool{
 		"-target":    true,
-		"-json":      true,
+		"-jsonl":     true,
 		"-silent":    true,
 		"-no-color":  true,
 		"-tags":      true,

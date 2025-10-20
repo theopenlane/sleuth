@@ -11,12 +11,47 @@ import (
 
 	"github.com/theopenlane/sleuth/config"
 	"github.com/theopenlane/sleuth/internal/api"
+	"github.com/theopenlane/sleuth/internal/intel"
 	"github.com/theopenlane/sleuth/internal/scanner"
 )
 
 func main() {
 	// Load configuration
 	cfg := config.New()
+
+	feedCfg, err := intel.LoadFeedConfig(cfg.IntelFeedConfig)
+	if err != nil {
+		log.Fatalf("Failed to load intel feed config (%s): %v", cfg.IntelFeedConfig, err)
+	}
+
+	intelClient := &http.Client{Timeout: cfg.IntelRequestTimeout}
+	intelManager, err := intel.NewManager(
+		feedCfg,
+		intel.WithStorageDir(cfg.IntelStorageDir),
+		intel.WithHTTPClient(intelClient),
+		intel.WithLogger(log.Default()),
+		intel.WithResolverTimeout(cfg.IntelResolverTimeout),
+		intel.WithDNSCacheTTL(cfg.IntelDNSCacheTTL),
+	)
+	if err != nil {
+		log.Fatalf("Failed to initialize intel manager: %v", err)
+	}
+
+	if cfg.IntelAutoHydrate {
+		go func() {
+			log.Println("Starting automatic intel hydration...")
+			summary, err := intelManager.Hydrate(context.Background())
+			if err != nil {
+				log.Printf("Automatic intel hydration failed: %v", err)
+				return
+			}
+			log.Printf(
+				"Automatic intel hydration complete: %d feeds processed, %d indicators ingested",
+				summary.SuccessfulFeeds,
+				summary.TotalIndicators,
+			)
+		}()
+	}
 
 	// Initialize scanner
 	s, err := scanner.New(
@@ -30,7 +65,7 @@ func main() {
 	defer s.Close()
 
 	// Initialize API router
-	handler := api.NewRouter(s)
+	handler := api.NewRouter(s, intelManager, cfg.MaxBodySize, cfg.ScanTimeout)
 
 	// Setup HTTP server
 	srv := &http.Server{

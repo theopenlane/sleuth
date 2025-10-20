@@ -2,20 +2,27 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
 
+	"github.com/theopenlane/sleuth/internal/intel"
 	"github.com/theopenlane/sleuth/internal/scanner"
 
 	// Import generated docs
 	_ "github.com/theopenlane/sleuth/docs"
 )
 
-// NewRouter creates a new chi router with all endpoints and middleware
-func NewRouter(s scanner.ScannerInterface) http.Handler {
-	h := &Handler{scanner: s}
+// NewRouter creates a new chi router with all endpoints and middleware.
+func NewRouter(s scanner.ScannerInterface, intelManager *intel.Manager, maxBodySize int64, scanTimeout time.Duration) http.Handler {
+	h := &Handler{
+		scanner:     s,
+		intel:       intelManager,
+		maxBodySize: maxBodySize,
+		scanTimeout: scanTimeout,
+	}
 
 	r := chi.NewRouter()
 
@@ -25,7 +32,7 @@ func NewRouter(s scanner.ScannerInterface) http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Compress(5))
-	r.Use(middleware.Timeout(60)) // 60 second timeout
+	r.Use(middleware.Timeout(scanTimeout + 10*time.Second)) // scan timeout + buffer
 	r.Use(middleware.Heartbeat("/ping"))
 
 	// CORS for browser access to Swagger UI
@@ -48,6 +55,11 @@ func NewRouter(s scanner.ScannerInterface) http.Handler {
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", h.handleHealth)
 		r.Post("/scan", h.handleScan)
+
+		r.Route("/intel", func(r chi.Router) {
+			r.Post("/hydrate", h.handleIntelHydrate)
+			r.Post("/check", h.handleIntelCheck)
+		})
 	})
 
 	// UI routes

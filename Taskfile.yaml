@@ -105,3 +105,84 @@ tasks:
       - rm -rf bin/
       - rm -rf docs/
       - rm -f coverage.out coverage.html
+
+  scan:ui:
+    desc: Build container, scan a domain, and open the results in a browser
+    deps: [docker:build]
+    vars:
+      DOMAIN: '{{default "theopenlane.io" .DOMAIN}}'
+    cmds:
+      - docker rm -f sleuth-scan >/dev/null 2>&1 || true
+      - docker run -d --rm -p 8080:8080 --name sleuth-scan sleuth:latest
+      - sleep 2
+      - >
+        curl -s -X POST -H "Content-Type: application/json" -d '{"domain":"{{.DOMAIN}}"}' http://localhost:8080/api/scan >/dev/null
+      - >
+        (xdg-open http://localhost:8080/ui || open http://localhost:8080/ui || true)
+
+  service:start:
+    desc: Start the Sleuth HTTP service locally (background)
+    silent: true
+    cmds:
+      - go run main.go
+
+  service:stop:
+    desc: Stop the locally running Sleuth service
+    silent: true
+    cmds:
+      - ./scripts/service_stop.sh
+
+  service:logs:
+    desc: Tail the Sleuth service logs produced by service:start
+    cmds:
+      - tail -f .tasktmp/sleuth.log
+
+  service:wait:
+    desc: Wait until the Sleuth health endpoint responds
+    vars:
+      URL: '{{default "http://localhost:8080/api/health" .URL}}'
+      RETRIES: '{{default 20 .RETRIES}}'
+      SLEEP: '{{default 1 .SLEEP}}'
+    cmds:
+      - ./scripts/service_wait.sh "{{.URL}}" "{{.RETRIES}}" "{{.SLEEP}}"
+
+  call:health:
+    desc: Call the health endpoint and pretty-print response
+    cmds:
+      - curl -s http://localhost:8080/api/health | jq
+
+  call:scan:
+    desc: Submit a domain or email to /api/scan
+    vars:
+      DOMAIN: '{{default "" .DOMAIN}}'
+      EMAIL: '{{default "" .EMAIL}}'
+    cmds:
+      - cmd: >
+          ./scripts/scan_submit.sh{{if .DOMAIN}} --domain "{{.DOMAIN}}"{{end}}{{if .EMAIL}} --email "{{.EMAIL}}"{{end}}
+
+  call:intel-hydrate:
+    desc: Trigger threat intelligence hydration (requires service running)
+    cmds:
+      - curl -s -X POST http://localhost:8080/api/intel/hydrate | jq
+
+  call:intel-check:
+    desc: Score an email/domain against hydrated intel
+    vars:
+      DOMAIN: '{{default "" .DOMAIN}}'
+      EMAIL: '{{default "" .EMAIL}}'
+      TYPES: '{{default "" .TYPES}}'
+      RESOLVE_IPS: '{{default "false" .RESOLVE_IPS}}'
+    cmds:
+      - cmd: >
+          ./scripts/intel_check.sh{{if .DOMAIN}} --domain "{{.DOMAIN}}"{{end}}{{if .EMAIL}} --email "{{.EMAIL}}"{{end}}{{if .TYPES}} --types "{{.TYPES}}"{{end}} --resolve-ips "{{.RESOLVE_IPS}}"
+
+  verify:
+    desc: Build, start service, verify all endpoints, and stop
+    deps: [build]
+    cmds:
+      - task: service:stop
+        ignore_error: true
+      - task: service:start
+      - task: service:wait
+      - ./scripts/verify.sh
+      - task: service:stop

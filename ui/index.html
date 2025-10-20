@@ -2,32 +2,498 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Sleuth Scan</title>
+  <title>Sleuth - Domain & Email Security Scanner</title>
   <style>
-    body { font-family: sans-serif; margin: 2rem; }
-    input { padding: 0.5rem; }
-    button { padding: 0.5rem 1rem; margin-left: 0.5rem; }
-    pre { background: #f0f0f0; padding: 1rem; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 2rem;
+      background: #f5f5f5;
+      color: #333;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      margin-top: 0;
+      color: #2c3e50;
+      border-bottom: 2px solid #3498db;
+      padding-bottom: 1rem;
+    }
+    .scan-modes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .mode-card {
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 1.5rem;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .mode-card:hover {
+      border-color: #3498db;
+      box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+    }
+    .mode-card.active {
+      border-color: #3498db;
+      background: #f0f8ff;
+    }
+    .mode-card h3 {
+      margin-top: 0;
+      color: #2c3e50;
+    }
+    .mode-card p {
+      color: #7f8c8d;
+      font-size: 0.9rem;
+      margin-bottom: 0;
+    }
+    .input-group {
+      margin-bottom: 1.5rem;
+    }
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+    input[type="text"], input[type="email"] {
+      width: 100%;
+      padding: 0.75rem;
+      border: 2px solid #e0e0e0;
+      border-radius: 4px;
+      font-size: 1rem;
+      transition: border-color 0.3s;
+    }
+    input[type="text"]:focus, input[type="email"]:focus {
+      outline: none;
+      border-color: #3498db;
+    }
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    button {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 0.75rem 2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #2980b9;
+    }
+    button:disabled {
+      background: #bdc3c7;
+      cursor: not-allowed;
+    }
+    .loading {
+      display: none;
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 4px;
+      color: #856404;
+    }
+    .loading.show {
+      display: block;
+    }
+    .results {
+      margin-top: 2rem;
+      display: none;
+    }
+    .results.show {
+      display: block;
+    }
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      background: #2c3e50;
+      color: white;
+      border-radius: 4px 4px 0 0;
+    }
+    .result-body {
+      border: 2px solid #2c3e50;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      padding: 1.5rem;
+    }
+    .intel-score {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: #f8f9fa;
+      border-radius: 4px;
+    }
+    .score-item {
+      text-align: center;
+    }
+    .score-item .label {
+      font-size: 0.8rem;
+      color: #7f8c8d;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+    .score-item .value {
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+    .risk-none { color: #95a5a6; }
+    .risk-low { color: #27ae60; }
+    .risk-medium { color: #f39c12; }
+    .risk-high { color: #e67e22; }
+    .risk-critical { color: #e74c3c; }
+    .recommendation {
+      padding: 1rem;
+      border-radius: 4px;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+    }
+    .recommend-approve { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .recommend-review { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+    .recommend-reject { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .flags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .flag {
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .flag.active {
+      background: #e74c3c;
+      color: white;
+    }
+    .flag.inactive {
+      background: #ecf0f1;
+      color: #95a5a6;
+    }
+    .checks {
+      margin-top: 1.5rem;
+    }
+    .check-item {
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+    .check-header {
+      padding: 1rem;
+      background: #f8f9fa;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .check-status {
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+    }
+    .status-pass { background: #d4edda; color: #155724; }
+    .status-fail { background: #f8d7da; color: #721c24; }
+    .status-error { background: #f8d7da; color: #721c24; }
+    .check-details {
+      padding: 1rem;
+      border-top: 1px solid #e0e0e0;
+      display: none;
+    }
+    .check-details.show {
+      display: block;
+    }
+    .finding {
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      border-left: 4px solid;
+      background: #f8f9fa;
+      border-radius: 2px;
+    }
+    .finding.critical { border-color: #e74c3c; }
+    .finding.high { border-color: #e67e22; }
+    .finding.medium { border-color: #f39c12; }
+    .finding.low { border-color: #3498db; }
+    .finding.info { border-color: #95a5a6; }
+    .finding-header {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .finding-details {
+      font-size: 0.9rem;
+      color: #7f8c8d;
+    }
+    pre {
+      background: #2c3e50;
+      color: #ecf0f1;
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+    }
   </style>
 </head>
 <body>
-  <h1>Sleuth Scan</h1>
-  <p>
-    <input id="domain" type="text" placeholder="example.com" />
-    <button id="scan">Scan</button>
-  </p>
-  <pre id="output"></pre>
+  <div class="container">
+    <h1>Sleuth - Domain & Email Security Scanner</h1>
+
+    <div class="scan-modes">
+      <div class="mode-card" data-mode="domain">
+        <h3>🔍 Domain Scan</h3>
+        <p>Full infrastructure analysis: DNS, HTTP, TLS, vulnerabilities, and technology detection</p>
+      </div>
+      <div class="mode-card active" data-mode="email">
+        <h3>📧 Email Check</h3>
+        <p>Fast threat intelligence lookup against malicious email databases</p>
+      </div>
+      <div class="mode-card" data-mode="both">
+        <h3>🔒 Complete Analysis</h3>
+        <p>Email intel check + comprehensive domain security scan</p>
+      </div>
+    </div>
+
+    <div class="input-group" id="domainInput">
+      <label for="domain">Domain</label>
+      <input type="text" id="domain" placeholder="example.com" />
+    </div>
+
+    <div class="input-group" id="emailInput" style="display: none;">
+      <label for="email">Email Address</label>
+      <input type="email" id="email" placeholder="user@example.com" />
+    </div>
+
+    <div class="checkbox-group" id="scanDomainOption" style="display: none;">
+      <input type="checkbox" id="scanDomain" />
+      <label for="scanDomain" style="margin-bottom: 0;">Also perform full domain infrastructure scan</label>
+    </div>
+
+    <button id="scanBtn">Scan</button>
+
+    <div class="loading" id="loading">
+      Scanning... This may take up to 2 minutes for full domain analysis.
+    </div>
+
+    <div class="results" id="results">
+      <div class="result-header">
+        <span id="resultTitle">Scan Results</span>
+        <span id="resultTime"></span>
+      </div>
+      <div class="result-body" id="resultBody"></div>
+    </div>
+  </div>
+
   <script>
-    document.getElementById('scan').addEventListener('click', async () => {
-      const domain = document.getElementById('domain').value;
-      const res = await fetch('/api/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain })
+    let currentMode = 'email';
+
+    // Mode selection
+    document.querySelectorAll('.mode-card').forEach(card => {
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        currentMode = card.dataset.mode;
+        updateInputs();
       });
-      const data = await res.json();
-      document.getElementById('output').textContent = JSON.stringify(data, null, 2);
     });
+
+    function updateInputs() {
+      const domainInput = document.getElementById('domainInput');
+      const emailInput = document.getElementById('emailInput');
+      const scanDomainOption = document.getElementById('scanDomainOption');
+
+      if (currentMode === 'domain') {
+        domainInput.style.display = 'block';
+        emailInput.style.display = 'none';
+        scanDomainOption.style.display = 'none';
+      } else if (currentMode === 'email') {
+        domainInput.style.display = 'none';
+        emailInput.style.display = 'block';
+        scanDomainOption.style.display = 'none';
+      } else if (currentMode === 'both') {
+        domainInput.style.display = 'none';
+        emailInput.style.display = 'block';
+        scanDomainOption.style.display = 'flex';
+        document.getElementById('scanDomain').checked = true;
+      }
+    }
+
+    // Scan button
+    document.getElementById('scanBtn').addEventListener('click', async () => {
+      const domain = document.getElementById('domain').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const scanDomain = document.getElementById('scanDomain').checked;
+
+      let body = {};
+      if (currentMode === 'domain' && domain) {
+        body = { domain };
+      } else if (currentMode === 'email' && email) {
+        body = { email };
+      } else if (currentMode === 'both' && email) {
+        body = { email, scan_domain: scanDomain };
+      } else {
+        alert('Please enter a valid domain or email');
+        return;
+      }
+
+      document.getElementById('loading').classList.add('show');
+      document.getElementById('results').classList.remove('show');
+      document.getElementById('scanBtn').disabled = true;
+
+      try {
+        const res = await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        displayResults(data);
+      } catch (error) {
+        alert('Scan failed: ' + error.message);
+      } finally {
+        document.getElementById('loading').classList.remove('show');
+        document.getElementById('scanBtn').disabled = false;
+      }
+    });
+
+    function displayResults(data) {
+      if (!data.success) {
+        alert('Error: ' + data.error);
+        return;
+      }
+
+      const result = data.data;
+      document.getElementById('resultTitle').textContent =
+        result.email ? `Results for ${result.email}` : `Results for ${result.domain}`;
+      document.getElementById('resultTime').textContent =
+        new Date(result.scanned_at * 1000).toLocaleString();
+
+      let html = '';
+
+      // Intel score section
+      if (result.intel_score) {
+        const score = result.intel_score;
+        html += `
+          <div class="intel-score">
+            <div class="score-item">
+              <div class="label">Risk Score</div>
+              <div class="value risk-${score.risk_level}">${score.score}/100</div>
+            </div>
+            <div class="score-item">
+              <div class="label">Risk Level</div>
+              <div class="value risk-${score.risk_level}">${score.risk_level.toUpperCase()}</div>
+            </div>
+          </div>
+          <div class="recommendation recommend-${score.recommendation}">
+            <strong>Recommendation:</strong> ${score.recommendation.toUpperCase()}
+          </div>
+        `;
+
+        // Flags
+        if (score.flags) {
+          html += '<div class="flags">';
+          const flags = [
+            { key: 'is_disposable_email', label: 'Disposable Email' },
+            { key: 'is_tor', label: 'Tor Network' },
+            { key: 'is_vpn', label: 'VPN' },
+            { key: 'is_proxy', label: 'Proxy' },
+            { key: 'is_bot', label: 'Bot' },
+            { key: 'is_c2', label: 'C2 Server' },
+            { key: 'is_spam', label: 'Spam' },
+            { key: 'is_phishing', label: 'Phishing' },
+            { key: 'is_malware', label: 'Malware' },
+            { key: 'is_bruteforce', label: 'Bruteforce' }
+          ];
+          flags.forEach(flag => {
+            const active = score.flags[flag.key];
+            html += `<span class="flag ${active ? 'active' : 'inactive'}">${flag.label}</span>`;
+          });
+          html += '</div>';
+        }
+
+        // Reasons
+        if (score.reasons && score.reasons.length > 0) {
+          html += '<h3>Threat Intelligence Findings</h3>';
+          score.reasons.forEach(reason => {
+            html += `<div class="finding high"><div class="finding-header">${reason}</div></div>`;
+          });
+        }
+      }
+
+      // Security checks
+      if (result.results && result.results.length > 0) {
+        html += '<div class="checks"><h3>Security Checks</h3>';
+        result.results.forEach((check, idx) => {
+          html += `
+            <div class="check-item">
+              <div class="check-header" onclick="toggleCheck(${idx})">
+                <span>${check.check_name.replace(/_/g, ' ').toUpperCase()}</span>
+                <span class="check-status status-${check.status}">${check.status}</span>
+              </div>
+              <div class="check-details" id="check-${idx}">
+          `;
+
+          if (check.error) {
+            html += `<p><strong>Error:</strong> ${check.error}</p>`;
+          }
+
+          if (check.findings && check.findings.length > 0) {
+            check.findings.forEach(finding => {
+              html += `
+                <div class="finding ${finding.severity}">
+                  <div class="finding-header">${finding.description}</div>
+                  <div class="finding-details">${finding.details || ''}</div>
+                </div>
+              `;
+            });
+          }
+
+          if (check.metadata) {
+            html += '<details><summary>Metadata</summary><pre>' +
+              JSON.stringify(check.metadata, null, 2) + '</pre></details>';
+          }
+
+          html += '</div></div>';
+        });
+        html += '</div>';
+      }
+
+      document.getElementById('resultBody').innerHTML = html;
+      document.getElementById('results').classList.add('show');
+    }
+
+    function toggleCheck(idx) {
+      const el = document.getElementById(`check-${idx}`);
+      el.classList.toggle('show');
+    }
+
+    // Initialize
+    updateInputs();
   </script>
 </body>
 </html>

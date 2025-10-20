@@ -105,8 +105,9 @@ func (s *Scanner) performNucleiScan(ctx context.Context, domain string) *types.C
 	}
 
 	result.Metadata["total_findings"] = len(findings)
-	result.Metadata["templates_used"] = s.options.NucleiTemplates
+	result.Metadata["template_tags"] = s.options.NucleiTemplates
 	result.Metadata["severity_filter"] = s.options.NucleiSeverity
+	result.Metadata["scan_completed"] = cmdCtx.Err() == nil
 
 	return result
 }
@@ -121,7 +122,7 @@ func (s *Scanner) isNucleiAvailable() bool {
 func (s *Scanner) buildNucleiArgs(domain string) []string {
 	args := []string{
 		"-target", fmt.Sprintf("https://%s", domain),
-		"-json",                    // JSON output format
+		"-jsonl",                   // JSONL output format
 		"-silent",                  // Reduce noise
 		"-no-color",               // No ANSI colors in output
 		"-rate-limit", "10",       // Rate limiting to be respectful

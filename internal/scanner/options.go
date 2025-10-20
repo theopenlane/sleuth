@@ -49,7 +49,7 @@ func DefaultScanOptions() *ScanOptions {
 		HTTPRetries:      2,
 		NucleiTemplates:  []string{"cves", "exposed-panels", "technologies", "misconfiguration"},
 		NucleiSeverity:   []string{"critical", "high", "medium"},
-		NucleiTimeout:    30 * time.Second,
+		NucleiTimeout:    90 * time.Second,
 		Verbose:          false,
 		Silent:           true,
 		MaxConcurrency:   50,

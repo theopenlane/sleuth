@@ -21,17 +21,22 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/theopenlane/sleuth/internal/intel"
 	"github.com/theopenlane/sleuth/internal/scanner"
 	"github.com/theopenlane/sleuth/internal/types"
 )
 
 // Handler manages API endpoints
 type Handler struct {
-	scanner scanner.ScannerInterface
+	scanner      scanner.ScannerInterface
+	intel        *intel.Manager
+	maxBodySize  int64
+	scanTimeout  time.Duration
 }
 
 // HealthResponse represents the health check response
@@ -42,6 +47,7 @@ type HealthResponse struct {
 }
 
 // handleHealth returns service health status
+//
 //	@Summary		Health check
 //	@Description	Returns the health status of the Sleuth service
 //	@Tags			health
@@ -54,22 +60,23 @@ func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Service:   "sleuth",
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
 // ScanRequest represents a domain scan request
 type ScanRequest struct {
-	Email  string `json:"email,omitempty" example:"user@example.com" description:"Email address to extract domain from"`
-	Domain string `json:"domain,omitempty" example:"example.com" description:"Domain to analyze directly"`
+	Email      string `json:"email,omitempty" example:"user@example.com" description:"Email address to check or extract domain from"`
+	Domain     string `json:"domain,omitempty" example:"example.com" description:"Domain to analyze directly"`
+	ScanDomain bool   `json:"scan_domain,omitempty" example:"false" description:"When email provided, also perform full domain infrastructure scan"`
 }
 
 // ScanResponse represents the scan response
 type ScanResponse struct {
-	Success bool                `json:"success" example:"true" description:"Whether the scan completed successfully"`
-	Data    *types.ScanResult   `json:"data,omitempty" description:"Scan results when successful"`
-	Error   string              `json:"error,omitempty" example:"Invalid domain format" description:"Error message when scan fails"`
+	Success bool              `json:"success" example:"true" description:"Whether the scan completed successfully"`
+	Data    *types.ScanResult `json:"data,omitempty" description:"Scan results when successful"`
+	Error   string            `json:"error,omitempty" example:"Invalid domain format" description:"Error message when scan fails"`
 }
 
 // ErrorResponse represents an error response
@@ -78,20 +85,26 @@ type ErrorResponse struct {
 	Error   string `json:"error" example:"Invalid request body"`
 }
 
-// handleScan processes domain scan requests
-//	@Summary		Scan domain
-//	@Description	Performs comprehensive security and technology analysis on a domain
-//	@Description	Accepts either an email address (domain extracted) or direct domain
+// handleScan processes domain and email scan requests
+//
+//	@Summary		Scan domain or email
+//	@Description	Performs security analysis on domain, email, or both
+//	@Description	- Domain only: Full infrastructure scan
+//	@Description	- Email only: Quick threat intelligence check
+//	@Description	- Email with scan_domain=true: Intel check + full domain scan
 //	@Tags			scan
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		ScanRequest	true	"Scan request containing email or domain"
+//	@Param			request	body		ScanRequest	true	"Scan request with email and/or domain"
 //	@Success		200		{object}	ScanResponse
 //	@Failure		400		{object}	ErrorResponse
 //	@Failure		405		{object}	ErrorResponse
 //	@Failure		500		{object}	ErrorResponse
 //	@Router			/scan [post]
 func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
+	if h.maxBodySize > 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, h.maxBodySize)
+	}
 
 	var req ScanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -99,30 +112,42 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract domain from email or use provided domain
-	domain := req.Domain
-	if domain == "" && req.Email != "" {
-		parts := strings.Split(req.Email, "@")
-		if len(parts) != 2 {
-			respondWithError(w, "Invalid email format", http.StatusBadRequest)
-			return
-		}
-		domain = parts[1]
-	}
-
-	if domain == "" {
+	// Validate input
+	if req.Domain == "" && req.Email == "" {
 		respondWithError(w, "Domain or email required", http.StatusBadRequest)
 		return
 	}
 
-	// Create context with scan metadata
-	ctx := context.WithValue(r.Context(), "scan_time", time.Now().Unix())
-	
-	// Perform scan  
-	result, err := h.scanner.ScanDomain(ctx, domain)
-	if err != nil {
-		respondWithError(w, err.Error(), http.StatusBadRequest)
-		return
+	// Create context with scan timeout
+	ctx, cancel := context.WithTimeout(context.Background(), h.scanTimeout)
+	defer cancel()
+	ctx = context.WithValue(ctx, "scan_time", time.Now().Unix())
+
+	// Determine scan mode
+	var result *types.ScanResult
+	var err error
+
+	if req.Domain != "" {
+		// Mode 1: Domain-only scan (full infrastructure analysis)
+		result, err = h.scanner.ScanDomain(ctx, req.Domain)
+		if err != nil {
+			respondWithError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else if req.Email != "" && !req.ScanDomain {
+		// Mode 2: Email-only (quick intel check)
+		result, err = h.performEmailCheck(ctx, req.Email)
+		if err != nil {
+			respondWithError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else if req.Email != "" && req.ScanDomain {
+		// Mode 3: Email + domain scan (intel + full infrastructure)
+		result, err = h.performEmailAndDomainScan(ctx, req.Email)
+		if err != nil {
+			respondWithError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Send response
@@ -130,10 +155,78 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Data:    result,
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+// performEmailCheck checks email against threat intelligence feeds only
+func (h *Handler) performEmailCheck(ctx context.Context, email string) (*types.ScanResult, error) {
+	// Validate email format
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid email format")
+	}
+	domain := parts[1]
+
+	// Check if intel manager is available
+	if h.intel == nil {
+		return nil, fmt.Errorf("threat intelligence not available")
+	}
+
+	// Perform intel check
+	score, err := h.intel.Check(ctx, intel.CheckRequest{
+		Email:  email,
+		Domain: domain,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("intel check failed: %w", err)
+	}
+
+	// Build scan result
+	result := &types.ScanResult{
+		Domain:     domain,
+		Email:      email,
+		ScannedAt:  fmt.Sprintf("%d", time.Now().Unix()),
+		Results:    []types.CheckResult{},
+		IntelScore: score,
+	}
+
+	return result, nil
+}
+
+// performEmailAndDomainScan checks email and performs full domain scan
+func (h *Handler) performEmailAndDomainScan(ctx context.Context, email string) (*types.ScanResult, error) {
+	// Validate email format
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid email format")
+	}
+	domain := parts[1]
+
+	// Perform domain scan
+	result, err := h.scanner.ScanDomain(ctx, domain)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add email to result
+	result.Email = email
+
+	// Add intel check if available
+	if h.intel != nil {
+		score, err := h.intel.Check(ctx, intel.CheckRequest{
+			Email:  email,
+			Domain: domain,
+		})
+		if err == nil {
+			result.IntelScore = score
+		}
+		// Don't fail the whole scan if intel check fails
+	}
+
+	return result, nil
 }
 
 // respondWithError sends an error response
@@ -142,7 +235,7 @@ func respondWithError(w http.ResponseWriter, message string, statusCode int) {
 		Success: false,
 		Error:   message,
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(response)

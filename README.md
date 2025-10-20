@@ -49,7 +49,15 @@ Sleuth uses environment variables for configuration:
 | `SLEUTH_WRITE_TIMEOUT` | `30s` | HTTP write timeout |
 | `SLEUTH_SHUTDOWN_TIMEOUT` | `30s` | Graceful shutdown timeout |
 | `SLEUTH_SCAN_TIMEOUT` | `60s` | Maximum scan duration |
-| `SLEUTH_MAX_BODY_SIZE` | `102400` | Maximum response body size (100KB) |
+| `SLEUTH_MAX_BODY_SIZE` | `102400` | Maximum request body size (100KB) |
+| `SLEUTH_INTEL_FEED_CONFIG` | `config/feed_config.json` | Path to the OSINT feed configuration file |
+| `SLEUTH_INTEL_STORAGE_DIR` | `data/intel` | Directory where hydrated threat intelligence data is stored |
+| `SLEUTH_INTEL_AUTO_HYDRATE` | `false` | Automatically hydrate feeds during service startup |
+| `SLEUTH_INTEL_REQUEST_TIMEOUT` | `90s` | Timeout for downloading a single feed |
+| `SLEUTH_INTEL_RESOLVER_TIMEOUT` | `10s` | Timeout for DNS lookups when scoring indicators |
+| `SLEUTH_INTEL_DNS_CACHE_TTL` | `5m` | How long DNS lookup results are cached when resolving domains |
+
+Threat-intel feeds can optionally declare an `indicators` array inside `config/feed_config.json` to restrict ingestion to specific observable types (`ip`, `cidr`, `domain`, `email`). When omitted, Sleuth will attempt to infer the indicator type of each line automatically.
 
 ## API Usage
 
@@ -131,6 +139,69 @@ Response:
   }
 }
 ```
+
+### Hydrate Threat Intelligence Feeds
+
+```bash
+POST /intel/hydrate
+```
+
+Response:
+```json
+{
+  "success": true,
+  "summary": {
+    "total_feeds": 120,
+    "successful_feeds": 118,
+    "failed_feeds": 2,
+    "total_indicators": 3852045,
+    "errors_encountered": true
+  }
+}
+```
+
+### Score an Email or Domain Against Threat Feeds
+
+```bash
+POST /intel/check
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "domain": "example.com",
+  "indicator_types": ["domain", "email"],
+  "include_resolved_ips": false
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "domain": "example.com",
+    "score": 45,
+    "matches": [
+      {
+        "value": "malicious.example.com",
+        "type": "domain",
+        "match_context": "domain example.com",
+        "categories": ["suspicious"],
+        "feeds": ["alienvault_reputation_generic"]
+      }
+    ],
+    "category_breakdown": [
+      {"category": "suspicious", "weight": 20},
+      {"category": "c2", "weight": 25}
+    ],
+    "issues": [
+      "dns lookup failed for example.com: lookup example.com: no such host"
+    ]
+  }
+}
+```
+
+`indicator_types` accepts any combination of `domain`, `email`, `ip`, or `cidr`. When omitted, Sleuth defaults to the most relevant indicator types for the provided inputs (e.g., domain lookups only evaluate domain-sourced intelligence by default). Set `include_resolved_ips` to `true` when you want domain lookups to also evaluate the resolved IP addresses against IP/CIDR feeds.
 
 ## Integration with Openlane
 
