@@ -106,7 +106,7 @@ func TestIntegrationWithRealScanner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer realScanner.Close()
+	defer func() { _ = realScanner.Close() }()
 
 	handler := NewRouter(realScanner, nil, 1024, 60*time.Second)
 

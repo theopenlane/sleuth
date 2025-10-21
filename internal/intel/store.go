@@ -117,7 +117,7 @@ func (s *indicatorStore) ingestFile(path string, feed Feed) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	// Increase buffer to handle long lines (e.g., CSV rows)

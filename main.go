@@ -62,7 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize scanner: %v", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	// Initialize API router
 	handler := api.NewRouter(s, intelManager, cfg.MaxBodySize, cfg.ScanTimeout)

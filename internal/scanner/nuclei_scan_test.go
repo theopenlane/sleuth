@@ -12,7 +12,7 @@ func TestMapNucleiSeverity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	testCases := []struct {
 		input    string
@@ -48,7 +48,7 @@ func TestBuildNucleiArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	args := scanner.buildNucleiArgs("example.com")
 	
@@ -95,7 +95,7 @@ func TestParseNucleiOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	testOutput := `{"template-id":"test-template","info":{"name":"Test Template","severity":"high","description":"Test description","author":["test-author"]},"type":"http","host":"https://example.com","matched-at":"https://example.com/test"}
 {"template-id":"another-template","info":{"name":"Another Template","severity":"medium","description":"Another description","author":["author2"]},"type":"http","host":"https://example.com","matched-at":"https://example.com/another"}`
@@ -124,7 +124,7 @@ func TestParseNucleiOutput_EmptyInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	results := scanner.parseNucleiOutput("")
 	
@@ -138,7 +138,7 @@ func TestParseNucleiOutput_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	testOutput := `{"invalid json}
 {valid: "json", but: "wrong format"}
@@ -161,7 +161,7 @@ func TestIsNucleiAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	available := scanner.isNucleiAvailable()
 	
@@ -175,7 +175,7 @@ func TestPerformNucleiScan_NucleiNotAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	// Mock nuclei as not available by setting an invalid path
 	originalPath := scanner.nucleiPath
@@ -205,7 +205,7 @@ func TestGetNucleiVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	version, err := scanner.GetNucleiVersion()
 	
@@ -235,7 +235,7 @@ func TestPerformNucleiScan_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	if !scanner.isNucleiAvailable() {
 		t.Skip("Nuclei not available, skipping integration test")

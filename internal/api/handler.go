@@ -31,6 +31,11 @@ import (
 	"github.com/theopenlane/sleuth/internal/types"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const scanTimeKey contextKey = "scan_time"
+
 // Handler manages API endpoints
 type Handler struct {
 	scanner      scanner.ScannerInterface
@@ -62,7 +67,7 @@ func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // ScanRequest represents a domain scan request
@@ -121,7 +126,7 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 	// Create context with scan timeout
 	ctx, cancel := context.WithTimeout(context.Background(), h.scanTimeout)
 	defer cancel()
-	ctx = context.WithValue(ctx, "scan_time", time.Now().Unix())
+	ctx = context.WithValue(ctx, scanTimeKey, time.Now().Unix())
 
 	// Determine scan mode
 	var result *types.ScanResult
@@ -158,7 +163,7 @@ func (h *Handler) handleScan(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // performEmailCheck checks email against threat intelligence feeds only
@@ -238,5 +243,5 @@ func respondWithError(w http.ResponseWriter, message string, statusCode int) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }

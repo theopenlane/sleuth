@@ -48,25 +48,25 @@ func TestNewWithEnvVars(t *testing.T) {
 	t.Cleanup(func() {
 		for key, val := range originalEnv {
 			if val == "" {
-				os.Unsetenv(key)
+				_ = os.Unsetenv(key)
 			} else {
-				os.Setenv(key, val)
+				_ = os.Setenv(key, val)
 			}
 		}
 	})
 
-	os.Setenv("SLEUTH_PORT", "9090")
-	os.Setenv("SLEUTH_READ_TIMEOUT", "45s")
-	os.Setenv("SLEUTH_WRITE_TIMEOUT", "45s")
-	os.Setenv("SLEUTH_SHUTDOWN_TIMEOUT", "45s")
-	os.Setenv("SLEUTH_SCAN_TIMEOUT", "120s")
-	os.Setenv("SLEUTH_MAX_BODY_SIZE", "204800")
-	os.Setenv("SLEUTH_INTEL_FEED_CONFIG", "/custom/path/feeds.json")
-	os.Setenv("SLEUTH_INTEL_STORAGE_DIR", "/custom/intel")
-	os.Setenv("SLEUTH_INTEL_AUTO_HYDRATE", "true")
-	os.Setenv("SLEUTH_INTEL_REQUEST_TIMEOUT", "120s")
-	os.Setenv("SLEUTH_INTEL_RESOLVER_TIMEOUT", "20s")
-	os.Setenv("SLEUTH_INTEL_DNS_CACHE_TTL", "10m")
+	_ = os.Setenv("SLEUTH_PORT", "9090")
+	_ = os.Setenv("SLEUTH_READ_TIMEOUT", "45s")
+	_ = os.Setenv("SLEUTH_WRITE_TIMEOUT", "45s")
+	_ = os.Setenv("SLEUTH_SHUTDOWN_TIMEOUT", "45s")
+	_ = os.Setenv("SLEUTH_SCAN_TIMEOUT", "120s")
+	_ = os.Setenv("SLEUTH_MAX_BODY_SIZE", "204800")
+	_ = os.Setenv("SLEUTH_INTEL_FEED_CONFIG", "/custom/path/feeds.json")
+	_ = os.Setenv("SLEUTH_INTEL_STORAGE_DIR", "/custom/intel")
+	_ = os.Setenv("SLEUTH_INTEL_AUTO_HYDRATE", "true")
+	_ = os.Setenv("SLEUTH_INTEL_REQUEST_TIMEOUT", "120s")
+	_ = os.Setenv("SLEUTH_INTEL_RESOLVER_TIMEOUT", "20s")
+	_ = os.Setenv("SLEUTH_INTEL_DNS_CACHE_TTL", "10m")
 
 	cfg := New()
 
@@ -132,9 +132,9 @@ func TestBoolEnvParsing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			os.Setenv("SLEUTH_INTEL_AUTO_HYDRATE", tc.value)
+			_ = os.Setenv("SLEUTH_INTEL_AUTO_HYDRATE", tc.value)
 			t.Cleanup(func() {
-				os.Unsetenv("SLEUTH_INTEL_AUTO_HYDRATE")
+				_ = os.Unsetenv("SLEUTH_INTEL_AUTO_HYDRATE")
 			})
 
 			cfg := New()
@@ -146,9 +146,9 @@ func TestBoolEnvParsing(t *testing.T) {
 }
 
 func TestInvalidDurationEnv(t *testing.T) {
-	os.Setenv("SLEUTH_READ_TIMEOUT", "invalid")
+	_ = os.Setenv("SLEUTH_READ_TIMEOUT", "invalid")
 	t.Cleanup(func() {
-		os.Unsetenv("SLEUTH_READ_TIMEOUT")
+		_ = os.Unsetenv("SLEUTH_READ_TIMEOUT")
 	})
 
 	cfg := New()
@@ -158,9 +158,9 @@ func TestInvalidDurationEnv(t *testing.T) {
 }
 
 func TestInvalidInt64Env(t *testing.T) {
-	os.Setenv("SLEUTH_MAX_BODY_SIZE", "not-a-number")
+	_ = os.Setenv("SLEUTH_MAX_BODY_SIZE", "not-a-number")
 	t.Cleanup(func() {
-		os.Unsetenv("SLEUTH_MAX_BODY_SIZE")
+		_ = os.Unsetenv("SLEUTH_MAX_BODY_SIZE")
 	})
 
 	cfg := New()

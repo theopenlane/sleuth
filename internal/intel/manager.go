@@ -133,7 +133,7 @@ func LoadFeedConfig(path string) (FeedConfig, error) {
 	if err != nil {
 		return FeedConfig{}, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return DecodeFeedConfig(file)
 }
@@ -270,8 +270,8 @@ func (m *Manager) fetchFeed(ctx context.Context, feed Feed, dest string) error {
 		return err
 	}
 	defer func() {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
 	}()
 
 	requester := httpsling.MustNew(

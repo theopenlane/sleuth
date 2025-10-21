@@ -25,7 +25,7 @@ spam@example.com
 	// Set up test HTTP server to serve feed data
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(feedData))
+		_, _ = w.Write([]byte(feedData))
 	}))
 	t.Cleanup(server.Close)
 
@@ -228,7 +228,7 @@ func TestHandleIntelHydrate(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("203.0.113.10\nmalicious.example.com\n"))
+		_, _ = w.Write([]byte("203.0.113.10\nmalicious.example.com\n"))
 	}))
 	t.Cleanup(server.Close)
 
@@ -318,7 +318,7 @@ func TestHandleIntelCheckWithFlags(t *testing.T) {
 	// Set up test HTTP server to serve feed data
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(feedData))
+		_, _ = w.Write([]byte(feedData))
 	}))
 	t.Cleanup(server.Close)
 

@@ -190,40 +190,11 @@ func (s *Scanner) performDNSAnalysisNet(ctx context.Context, domain string) *typ
 	return result
 }
 
-// isVulnerableService checks if a CNAME target is potentially vulnerable
+// isVulnerableService checks if a CNAME target is potentially vulnerable to takeover
 func (s *Scanner) isVulnerableService(cname string) bool {
-	vulnerablePatterns := []string{
-		".herokuapp.com",
-		".azurewebsites.net",
-		".cloudapp.net",
-		".cloudapp.azure.com",
-		".s3.amazonaws.com",
-		".s3-website",
-		".github.io",
-		".gitlab.io",
-		".surge.sh",
-		".bitbucket.io",
-		".ghost.io",
-		".zendesk.com",
-		".desk.com",
-		".fastly.net",
-		".feedpress.me",
-		".shopify.com",
-		".statuspage.io",
-		".uservoice.com",
-		".wpengine.com",
-		".pantheonsite.io",
-		".teamwork.com",
-		".helpjuice.com",
-		".helpscoutdocs.com",
-		".cargo.site",
-		".cargocollective.com",
-		".redirect.pizza",
-	}
-
 	cname = strings.ToLower(strings.TrimSuffix(cname, "."))
-	for _, pattern := range vulnerablePatterns {
-		if strings.HasSuffix(cname, pattern) {
+	for _, fingerprint := range takeoverFingerprints {
+		if strings.HasSuffix(cname, fingerprint.CNAMEPattern) {
 			return true
 		}
 	}

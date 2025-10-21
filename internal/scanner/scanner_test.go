@@ -12,7 +12,7 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	if scanner.options == nil {
 		t.Error("Expected scanner to have options")
@@ -28,7 +28,7 @@ func TestNewWithOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner with options: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	if !scanner.options.Verbose {
 		t.Error("Expected verbose mode to be enabled")
@@ -48,7 +48,7 @@ func TestScanDomain_InvalidDomain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	ctx := context.Background()
 	
@@ -75,7 +75,7 @@ func TestScanDomain_ValidDomain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -124,7 +124,7 @@ func TestScanDomain_EmailInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -165,7 +165,7 @@ func BenchmarkScanDomain(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	ctx := context.Background()
 	

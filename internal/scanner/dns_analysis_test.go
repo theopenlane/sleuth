@@ -13,7 +13,7 @@ func TestIsVulnerableService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	testCases := []struct {
 		cname      string
@@ -46,7 +46,7 @@ func TestAnalyzeEmailProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	testCases := []struct {
 		mxRecords []string
@@ -96,7 +96,7 @@ func TestAnalyzeTXTRecords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	testCases := []struct {
 		name         string
@@ -179,7 +179,7 @@ func TestPerformDNSAnalysis_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer scanner.Close()
+	defer func() { _ = scanner.Close() }()
 	
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

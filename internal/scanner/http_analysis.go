@@ -2,12 +2,10 @@ package scanner
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/theopenlane/sleuth/internal/types"
 )
@@ -24,11 +22,6 @@ func (s *Scanner) performHTTPAnalysis(ctx context.Context, domain string) *types
 	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: s.options.HTTPTimeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: false,
-			},
-		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return fmt.Errorf("too many redirects")
@@ -69,9 +62,9 @@ func (s *Scanner) performHTTPAnalysis(ctx context.Context, domain string) *types
 	// Analyze security headers
 	s.analyzeSecurityHeaders(resp, result)
 
-	// Analyze TLS if HTTPS
-	if resp.TLS != nil {
-		s.analyzeTLSConfiguration(resp.TLS, result)
+	// Analyze TLS if HTTPS using tlsx library
+	if resp.Request.URL.Scheme == "https" {
+		s.analyzeTLSWithTLSX(ctx, domain, result)
 	}
 
 	// Read and analyze response body (limited)
@@ -82,8 +75,8 @@ func (s *Scanner) performHTTPAnalysis(ctx context.Context, domain string) *types
 		s.detectTechnologies(body, resp.Header, result)
 	}
 
-	// Check for common exposed files
-	s.checkExposedFiles(ctx, domain, client, result)
+	// Note: Exposed files are now detected via nuclei templates
+	// Use tags: exposed-panels, exposures, misconfigurations
 
 	return result
 }
@@ -192,72 +185,6 @@ func (s *Scanner) analyzeSecurityHeaders(resp *http.Response, result *types.Chec
 	}
 }
 
-// analyzeTLSConfiguration analyzes TLS/SSL configuration
-func (s *Scanner) analyzeTLSConfiguration(tlsState *tls.ConnectionState, result *types.CheckResult) {
-	tlsInfo := make(map[string]interface{})
-
-	// TLS version analysis
-	tlsVersion := "Unknown"
-	switch tlsState.Version {
-	case tls.VersionTLS10:
-		tlsVersion = "TLS 1.0"
-		result.Findings = append(result.Findings, types.Finding{
-			Severity:    "critical",
-			Type:        "weak_tls",
-			Description: "Outdated TLS 1.0 in use",
-			Details:     "TLS 1.0 is deprecated and has known vulnerabilities",
-		})
-	case tls.VersionTLS11:
-		tlsVersion = "TLS 1.1"
-		result.Findings = append(result.Findings, types.Finding{
-			Severity:    "high",
-			Type:        "weak_tls",
-			Description: "Outdated TLS 1.1 in use",
-			Details:     "TLS 1.1 is deprecated and should be upgraded",
-		})
-	case tls.VersionTLS12:
-		tlsVersion = "TLS 1.2"
-	case tls.VersionTLS13:
-		tlsVersion = "TLS 1.3"
-	}
-
-	tlsInfo["version"] = tlsVersion
-	tlsInfo["cipher_suite"] = tls.CipherSuiteName(tlsState.CipherSuite)
-
-	// Certificate analysis
-	if len(tlsState.PeerCertificates) > 0 {
-		cert := tlsState.PeerCertificates[0]
-		certInfo := map[string]interface{}{
-			"subject":    cert.Subject.String(),
-			"issuer":     cert.Issuer.String(),
-			"not_before": cert.NotBefore.Format(time.RFC3339),
-			"not_after":  cert.NotAfter.Format(time.RFC3339),
-			"dns_names":  cert.DNSNames,
-		}
-
-		// Check certificate expiration
-		daysUntilExpiry := int(time.Until(cert.NotAfter).Hours() / 24)
-		if daysUntilExpiry < 0 {
-			result.Findings = append(result.Findings, types.Finding{
-				Severity:    "critical",
-				Type:        "expired_certificate",
-				Description: "SSL certificate has expired",
-				Details:     fmt.Sprintf("Expired %d days ago", -daysUntilExpiry),
-			})
-		} else if daysUntilExpiry < 30 {
-			result.Findings = append(result.Findings, types.Finding{
-				Severity:    "high",
-				Type:        "expiring_certificate",
-				Description: "SSL certificate expiring soon",
-				Details:     fmt.Sprintf("Expires in %d days", daysUntilExpiry),
-			})
-		}
-
-		tlsInfo["certificate"] = certInfo
-	}
-
-	result.Metadata["tls"] = tlsInfo
-}
 
 // analyzeResponseBody analyzes the HTTP response body for issues
 func (s *Scanner) analyzeResponseBody(body string, result *types.CheckResult) {
@@ -286,42 +213,3 @@ func (s *Scanner) analyzeResponseBody(body string, result *types.CheckResult) {
 	}
 }
 
-// checkExposedFiles checks for commonly exposed sensitive files
-func (s *Scanner) checkExposedFiles(ctx context.Context, domain string, client *http.Client, result *types.CheckResult) {
-	files := map[string]string{
-		"/.env":                     "Environment configuration file",
-		"/.git/config":              "Git configuration file",
-		"/robots.txt":               "Robots.txt file",
-		"/sitemap.xml":              "XML sitemap",
-		"/.well-known/security.txt": "Security policy file",
-		"/wp-config.php":            "WordPress configuration",
-		"/config.php":               "PHP configuration file",
-		"/phpmyadmin":               "phpMyAdmin interface",
-		"/admin":                    "Admin interface",
-		"/backup":                   "Backup directory",
-	}
-
-	for path, description := range files {
-		url := fmt.Sprintf("https://%s%s", domain, path)
-		req, _ := http.NewRequestWithContext(ctx, "HEAD", url, nil)
-		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Sleuth/1.0)")
-
-		if resp, err := client.Do(req); err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == 200 {
-				severity := "info"
-				if strings.Contains(path, ".env") || strings.Contains(path, ".git") ||
-					strings.Contains(path, "config") {
-					severity = "high"
-				}
-
-				result.Findings = append(result.Findings, types.Finding{
-					Severity:    severity,
-					Type:        "exposed_file",
-					Description: fmt.Sprintf("Exposed %s", description),
-					Details:     fmt.Sprintf("Accessible at %s", url),
-				})
-			}
-		}
-	}
-}

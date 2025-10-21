@@ -141,7 +141,8 @@ func TestHandleScan_ValidEmail(t *testing.T) {
 	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
 
 	requestBody := ScanRequest{
-		Email: "test@example.com",
+		Email:      "test@example.com",
+		ScanDomain: true, // Use scanner instead of requiring intel
 	}
 
 	body, _ := json.Marshal(requestBody)
@@ -161,7 +162,11 @@ func TestHandleScan_ValidEmail(t *testing.T) {
 	}
 
 	if !response.Success {
-		t.Errorf("Expected success=true, got %v", response.Success)
+		t.Errorf("Expected success=true, got %v (error: %s)", response.Success, response.Error)
+	}
+
+	if response.Data == nil {
+		t.Fatal("Expected scan data")
 	}
 
 	if response.Data.Domain != "example.com" {
@@ -432,7 +437,7 @@ func TestHandleScan_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create scanner: %v", err)
 	}
-	defer realScanner.Close()
+	defer func() { _ = realScanner.Close() }()
 
 	handler := NewRouter(realScanner, nil, 1024, 60*time.Second)
 

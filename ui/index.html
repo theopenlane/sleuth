@@ -108,37 +108,96 @@
     }
     .loading {
       display: none;
-      margin-top: 1rem;
-      padding: 1rem;
-      background: #fff3cd;
-      border: 1px solid #ffc107;
-      border-radius: 4px;
-      color: #856404;
+      margin-top: 1.5rem;
+      padding: 2rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      color: white;
+      text-align: center;
     }
     .loading.show {
       display: block;
     }
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      margin: 0 auto 1rem;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .loading-text {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .loading-subtitle {
+      font-size: 0.9rem;
+      opacity: 0.9;
+    }
     .results {
       margin-top: 2rem;
       display: none;
+      animation: fadeIn 0.5s ease-in;
     }
     .results.show {
       display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     .result-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1rem;
-      background: #2c3e50;
+      padding: 1.5rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      border-radius: 4px 4px 0 0;
+      border-radius: 8px 8px 0 0;
+    }
+    .result-header h2 {
+      margin: 0;
+      font-size: 1.3rem;
+    }
+    .result-header small {
+      opacity: 0.9;
+      font-size: 0.85rem;
     }
     .result-body {
-      border: 2px solid #2c3e50;
+      border: 2px solid #e0e0e0;
       border-top: none;
-      border-radius: 0 0 4px 4px;
+      border-radius: 0 0 8px 8px;
+      padding: 2rem;
+      background: #fafafa;
+    }
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .summary-card {
+      background: white;
       padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .summary-card-value {
+      font-size: 2rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .summary-card-label {
+      font-size: 0.9rem;
+      color: #7f8c8d;
+      text-transform: uppercase;
     }
     .intel-score {
       display: grid;
@@ -200,19 +259,29 @@
       margin-top: 1.5rem;
     }
     .check-item {
+      background: white;
       border: 1px solid #e0e0e0;
-      border-radius: 4px;
+      border-radius: 8px;
       margin-bottom: 1rem;
       overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      transition: box-shadow 0.3s;
+    }
+    .check-item:hover {
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
     .check-header {
-      padding: 1rem;
-      background: #f8f9fa;
+      padding: 1.25rem;
+      background: white;
       font-weight: 600;
       display: flex;
       justify-content: space-between;
       align-items: center;
       cursor: pointer;
+      transition: background 0.3s;
+    }
+    .check-header:hover {
+      background: #f8f9fa;
     }
     .check-status {
       padding: 0.25rem 0.75rem;
@@ -258,6 +327,109 @@
       overflow-x: auto;
       font-size: 0.85rem;
     }
+    details {
+      margin-top: 0.5rem;
+      padding: 0.75rem;
+      background: white;
+      border-radius: 4px;
+      border: 1px solid #e0e0e0;
+    }
+    details summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: #3498db;
+      user-select: none;
+    }
+    details summary:hover {
+      color: #2980b9;
+    }
+    details[open] summary {
+      margin-bottom: 1rem;
+    }
+    .action-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .action-btn {
+      padding: 0.5rem 1rem;
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #2c3e50;
+      transition: all 0.3s;
+    }
+    .action-btn:hover {
+      border-color: #3498db;
+      color: #3498db;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: #95a5a6;
+    }
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #2c3e50;
+      margin: 2rem 0 1rem 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    .severity-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .severity-critical {
+      background: #fee;
+      color: #c00;
+    }
+    .severity-high {
+      background: #ffe8e8;
+      color: #d63031;
+    }
+    .severity-medium {
+      background: #fff4e6;
+      color: #e67e22;
+    }
+    .severity-low {
+      background: #e8f5e9;
+      color: #27ae60;
+    }
+    .severity-info {
+      background: #e3f2fd;
+      color: #3498db;
+    }
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #2c3e50;
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      opacity: 0;
+      transform: translateY(100px);
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
   </style>
 </head>
 <body>
@@ -297,17 +469,27 @@
     <button id="scanBtn">Scan</button>
 
     <div class="loading" id="loading">
-      Scanning... This may take up to 2 minutes for full domain analysis.
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Analyzing...</div>
+      <div class="loading-subtitle">Performing comprehensive security scan</div>
     </div>
 
     <div class="results" id="results">
-      <div class="result-header">
-        <span id="resultTitle">Scan Results</span>
-        <span id="resultTime"></span>
+      <div class="result-header" id="resultTitle">
+        <h2>Scan Results</h2>
       </div>
-      <div class="result-body" id="resultBody"></div>
+      <div class="result-body">
+        <div class="action-bar">
+          <button class="action-btn" onclick="exportJSON()">📄 Export JSON</button>
+          <button class="action-btn" onclick="copyReport()">📋 Copy Report</button>
+          <button class="action-btn" onclick="printReport()">🖨️ Print</button>
+        </div>
+        <div id="resultBody"></div>
+      </div>
     </div>
   </div>
+
+  <div class="toast" id="toast"></div>
 
   <script>
     let currentMode = 'email';
@@ -371,10 +553,21 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+
         const data = await res.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Scan failed');
+        }
+
         displayResults(data);
       } catch (error) {
-        alert('Scan failed: ' + error.message);
+        showToast(`Scan failed: ${error.message}`);
+        document.getElementById('results').classList.remove('show');
       } finally {
         document.getElementById('loading').classList.remove('show');
         document.getElementById('scanBtn').disabled = false;
@@ -383,17 +576,50 @@
 
     function displayResults(data) {
       if (!data.success) {
-        alert('Error: ' + data.error);
+        showToast('Error: ' + data.error);
         return;
       }
 
       const result = data.data;
-      document.getElementById('resultTitle').textContent =
-        result.email ? `Results for ${result.email}` : `Results for ${result.domain}`;
-      document.getElementById('resultTime').textContent =
-        new Date(result.scanned_at * 1000).toLocaleString();
+      const titleEl = document.getElementById('resultTitle');
+      titleEl.innerHTML = `
+        <div>
+          <h2 style="margin:0;">
+            ${result.email ? '📧 ' + result.email : '🌐 ' + result.domain}
+          </h2>
+          <small>Scanned on ${new Date(result.scanned_at * 1000).toLocaleString()}</small>
+        </div>
+      `;
 
       let html = '';
+
+      // Summary cards
+      const checkCount = result.results ? result.results.length : 0;
+      const failCount = result.results ? result.results.filter(c => c.status === 'fail').length : 0;
+      const findingsCount = result.results ? result.results.reduce((acc, c) => acc + (c.findings?.length || 0), 0) : 0;
+      const criticalCount = result.results ? result.results.reduce((acc, c) =>
+        acc + (c.findings?.filter(f => f.severity === 'critical').length || 0), 0) : 0;
+
+      html += `
+        <div class="summary-cards">
+          <div class="summary-card">
+            <div class="summary-card-value">${checkCount}</div>
+            <div class="summary-card-label">Checks Run</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-value risk-${failCount > 0 ? 'high' : 'low'}">${failCount}</div>
+            <div class="summary-card-label">Failed Checks</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-value">${findingsCount}</div>
+            <div class="summary-card-label">Total Findings</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-value risk-${criticalCount > 0 ? 'critical' : 'low'}">${criticalCount}</div>
+            <div class="summary-card-label">Critical Issues</div>
+          </div>
+        </div>
+      `;
 
       // Intel score section
       if (result.intel_score) {
@@ -438,49 +664,93 @@
 
         // Reasons
         if (score.reasons && score.reasons.length > 0) {
-          html += '<h3>Threat Intelligence Findings</h3>';
+          html += '<div class="section-title">🚨 Threat Intelligence Findings</div>';
           score.reasons.forEach(reason => {
-            html += `<div class="finding high"><div class="finding-header">${reason}</div></div>`;
+            html += `<div class="finding high">
+              <div class="finding-header">
+                <span class="severity-badge severity-high">ALERT</span>
+                ${reason}
+              </div>
+            </div>`;
           });
         }
+      } else if (result.results && result.results.length === 0) {
+        html += '<div class="empty-state"><div class="empty-state-icon">📊</div><div>Quick intel check completed - no detailed scans performed</div></div>';
       }
 
       // Security checks
       if (result.results && result.results.length > 0) {
-        html += '<div class="checks"><h3>Security Checks</h3>';
+        html += '<div class="section-title">Security Checks</div>';
+        html += '<div class="checks">';
+
         result.results.forEach((check, idx) => {
+          const findingsCount = check.findings ? check.findings.length : 0;
+          const criticalCount = check.findings ? check.findings.filter(f => f.severity === 'critical').length : 0;
+          const highCount = check.findings ? check.findings.filter(f => f.severity === 'high').length : 0;
+
           html += `
             <div class="check-item">
               <div class="check-header" onclick="toggleCheck(${idx})">
-                <span>${check.check_name.replace(/_/g, ' ').toUpperCase()}</span>
-                <span class="check-status status-${check.status}">${check.status}</span>
+                <span>
+                  ${check.check_name.replace(/_/g, ' ').toUpperCase()}
+                  ${findingsCount > 0 ? `<span style="color: #7f8c8d; font-weight: normal; font-size: 0.85rem;"> (${findingsCount} findings)</span>` : ''}
+                </span>
+                <span class="check-status status-${check.status}">${check.status.toUpperCase()}</span>
               </div>
               <div class="check-details" id="check-${idx}">
           `;
 
           if (check.error) {
-            html += `<p><strong>Error:</strong> ${check.error}</p>`;
+            html += `<div class="finding high">
+              <div class="finding-header">⚠️ Error occurred during scan</div>
+              <div class="finding-details">${check.error}</div>
+            </div>`;
           }
 
           if (check.findings && check.findings.length > 0) {
+            // Group findings by severity
+            const groupedFindings = {
+              critical: [],
+              high: [],
+              medium: [],
+              low: [],
+              info: []
+            };
+
             check.findings.forEach(finding => {
-              html += `
-                <div class="finding ${finding.severity}">
-                  <div class="finding-header">${finding.description}</div>
-                  <div class="finding-details">${finding.details || ''}</div>
-                </div>
-              `;
+              groupedFindings[finding.severity]?.push(finding);
             });
+
+            // Display by severity order
+            ['critical', 'high', 'medium', 'low', 'info'].forEach(severity => {
+              if (groupedFindings[severity].length > 0) {
+                groupedFindings[severity].forEach(finding => {
+                  html += `
+                    <div class="finding ${finding.severity}">
+                      <div class="finding-header">
+                        <span class="severity-badge severity-${finding.severity}">${finding.severity}</span>
+                        ${finding.description}
+                      </div>
+                      ${finding.details ? `<div class="finding-details">${finding.details}</div>` : ''}
+                    </div>
+                  `;
+                });
+              }
+            });
+          } else if (!check.error) {
+            html += '<div class="empty-state"><div class="empty-state-icon">✓</div><div>No issues found</div></div>';
           }
 
-          if (check.metadata) {
-            html += '<details><summary>Metadata</summary><pre>' +
+          if (check.metadata && Object.keys(check.metadata).length > 0) {
+            html += '<details><summary>📊 View Technical Details</summary><pre>' +
               JSON.stringify(check.metadata, null, 2) + '</pre></details>';
           }
 
           html += '</div></div>';
         });
         html += '</div>';
+      } else {
+        html += '<div class="empty-state"><div class="empty-state-icon">🔍</div><div>No security checks performed</div></div>';
       }
 
       document.getElementById('resultBody').innerHTML = html;
@@ -491,6 +761,96 @@
       const el = document.getElementById(`check-${idx}`);
       el.classList.toggle('show');
     }
+
+    let currentScanData = null;
+
+    // Update displayResults to store the data
+    const originalDisplayResults = displayResults;
+    function displayResultsWrapper(data) {
+      currentScanData = data;
+      originalDisplayResults(data);
+    }
+
+    // Replace the old displayResults assignment
+    window.displayResults = displayResultsWrapper;
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    function exportJSON() {
+      if (!currentScanData) return;
+      const dataStr = JSON.stringify(currentScanData, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sleuth-scan-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Exported scan results as JSON');
+    }
+
+    function copyReport() {
+      if (!currentScanData) return;
+      const result = currentScanData.data;
+      let text = `Sleuth Security Scan Report\n`;
+      text += `================================\n\n`;
+      text += `Domain: ${result.domain}\n`;
+      if (result.email) text += `Email: ${result.email}\n`;
+      text += `Scan Date: ${new Date(result.scanned_at * 1000).toLocaleString()}\n\n`;
+
+      if (result.intel_score) {
+        text += `Threat Intelligence Score\n`;
+        text += `-------------------------\n`;
+        text += `Risk Score: ${result.intel_score.score}/100\n`;
+        text += `Risk Level: ${result.intel_score.risk_level.toUpperCase()}\n`;
+        text += `Recommendation: ${result.intel_score.recommendation.toUpperCase()}\n\n`;
+      }
+
+      if (result.results) {
+        text += `Security Checks\n`;
+        text += `---------------\n`;
+        result.results.forEach(check => {
+          text += `\n[${check.status.toUpperCase()}] ${check.check_name.replace(/_/g, ' ').toUpperCase()}\n`;
+          if (check.findings && check.findings.length > 0) {
+            check.findings.forEach(finding => {
+              text += `  - [${finding.severity.toUpperCase()}] ${finding.description}\n`;
+              if (finding.details) text += `    ${finding.details}\n`;
+            });
+          }
+        });
+      }
+
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Report copied to clipboard');
+      });
+    }
+
+    function printReport() {
+      window.print();
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          document.getElementById('scanBtn').click();
+        } else if (e.key === 'e') {
+          e.preventDefault();
+          exportJSON();
+        } else if (e.key === 'c' && e.shiftKey) {
+          e.preventDefault();
+          copyReport();
+        }
+      }
+    });
 
     // Initialize
     updateInputs();
