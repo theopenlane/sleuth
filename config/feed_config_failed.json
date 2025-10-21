@@ -1,0 +1,125 @@
+{
+  "feeds": [
+    {
+      "name": "phishtank_verified_domains",
+      "url": "https://raw.githubusercontent.com/arnydo/phishtank-domain-list/master/domain_list.txt",
+      "type": [
+        "phishing",
+        "suspicious"
+      ],
+      "indicators": [
+        "domain"
+      ]
+    },
+    {
+      "name": "urlhaus_domainlist",
+      "url": "https://urlhaus.abuse.ch/downloads/domainlist.txt",
+      "type": [
+        "malware",
+        "phishing",
+        "suspicious"
+      ],
+      "indicators": [
+        "domain"
+      ]
+    },
+    {
+      "name": "bbcan177_malicious_domains",
+      "url": "https://raw.githubusercontent.com/BBcan177/BBcan177/master/blacklists/domain.txt",
+      "type": [
+        "suspicious"
+      ],
+      "indicators": [
+        "domain"
+      ]
+    },
+    {
+      "name": "disposable_email_blacklist",
+      "url": "https://raw.githubusercontent.com/andreis/disposable-email-domains/master/disposable_email_blacklist.txt",
+      "type": [
+        "disposable",
+        "suspicious"
+      ],
+      "indicators": [
+        "domain"
+      ]
+    },
+    {
+      "name": "3coresec_bruteforce_ssh",
+      "url": "https://blacklist.3coresec.net/lists/ssh.txt",
+      "type": [
+        "bruteforce"
+      ]
+    },
+    {
+      "name": "3coresec_http_attacks",
+      "url": "https://blacklist.3coresec.net/lists/http.txt",
+      "type": [
+        "suspicious"
+      ]
+    },
+    {
+      "name": "3coresec_scan_exploit",
+      "url": "https://blacklist.3coresec.net/lists/misc.txt",
+      "type": [
+        "suspicious"
+      ]
+    },
+    {
+      "name": "kriskintel_malicious_ips",
+      "url": "https://kriskintel.com/feeds/ktip_malicious_Ips.txt",
+      "type": [
+        "suspicious"
+      ]
+    },
+    {
+      "name": "myip_blocklist_latest",
+      "url": "https://myip.ms/files/blacklist/htaccess/latest_blacklist.txt",
+      "type": [
+        "suspicious"
+      ]
+    },
+    {
+      "name": "talos_blocklist",
+      "url": "https://www.talosintelligence.com/documents/ip-blacklist",
+      "type": [
+        "suspicious"
+      ]
+    },
+    {
+      "name": "charles_thehaleys_ssh_attack",
+      "url": "https://charles.the-haleys.org/ssh_dico_attack_with_timestamps.php?days=30",
+      "type": [
+        "bruteforce"
+      ]
+    },
+    {
+      "name": "beesting_honeypot",
+      "url": "https://beesting.tools/",
+      "type": [
+        "suspicious"
+      ]
+    },
+    {
+      "name": "rodanmaharjan_c2_1",
+      "url": "https://github.com/rodanmaharjan/ThreatIntelligence/raw/main/C2%20IOC.txt",
+      "type": [
+        "c2"
+      ]
+    },
+    {
+      "name": "rodanmaharjan_c2_4",
+      "url": "https://github.com/rodanmaharjan/ThreatIntelligence/raw/main/blackcat%20ransomware.txt",
+      "type": [
+        "suspicious"
+      ]
+    },
+    {
+      "name": "digitalside_osint",
+      "url": "https://osint.digitalside.it/Threat-Intel/lists/latestips.txt",
+      "type": [
+        "suspicious"
+      ]
+    }
+  ]
+}
