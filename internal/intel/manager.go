@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -16,31 +15,67 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+	"github.com/samber/lo"
 	"github.com/theopenlane/httpsling"
 )
 
-// ErrNotHydrated is returned when a scoring request is made before the feeds are hydrated.
-var ErrNotHydrated = errors.New("threat intelligence feeds have not been hydrated")
+const (
+	// defaultRequestTimeout is the default HTTP client timeout for feed downloads
+	defaultRequestTimeout = 90 * time.Second
+	// defaultResolverTimeout is the default time limit for DNS lookups during scoring
+	defaultResolverTimeout = 10 * time.Second
+	// defaultDNSCacheTTL is the default TTL for cached DNS responses
+	defaultDNSCacheTTL = 5 * time.Minute
+	// maxScore is the maximum possible threat intelligence score
+	maxScore = 100
+	// storageDirPerm is the file mode used when creating the storage directory
+	storageDirPerm = 0o755
 
-// Manager coordinates downloading feeds, storing indicators, and serving lookups.
+	// Category weight constants used in threat scoring
+	weightC2         = 30
+	weightBot        = 25
+	weightSuspicious = 20
+	weightTor        = 15
+	weightVPN        = 10
+	weightBruteforce = 15
+	weightDC         = 5
+	weightDefault    = 10
+
+	// Score thresholds for risk level and recommendation classification
+	thresholdLow    = 20
+	thresholdMedium = 50
+	thresholdHigh   = 75
+)
+
+// Manager coordinates downloading feeds, storing indicators, and serving lookups
 type Manager struct {
-	mu              sync.RWMutex
-	config          FeedConfig
-	store           *indicatorStore
-	httpClient      *http.Client
-	storageDir      string
-	logger          *log.Logger
-	hydrated        bool
-	lastHydrated    time.Time
+	// mu guards concurrent access to the Manager's mutable state
+	mu sync.RWMutex
+	// config holds the feed definitions used during hydration
+	config FeedConfig
+	// store is the in-memory indicator store built from ingested feeds
+	store *indicatorStore
+	// httpClient is the HTTP client used to download feed content
+	httpClient *http.Client
+	// storageDir is the filesystem path where raw feed downloads are persisted
+	storageDir string
+	// hydrated indicates whether feeds have been successfully loaded at least once
+	hydrated bool
+	// lastHydrated records the time of the most recent successful hydration
+	lastHydrated time.Time
+	// resolverTimeout is the time limit applied to DNS lookups during scoring
 	resolverTimeout time.Duration
-	resolver        *net.Resolver
-	dnsCache        *dnsCache
+	// resolver is the DNS resolver used for domain-to-IP lookups
+	resolver *net.Resolver
+	// dnsCache is the TTL cache for DNS lookup results
+	dnsCache *dnsCache
 }
 
-// Option configures the Manager.
+// Option configures the Manager
 type Option func(*Manager)
 
-// WithStorageDir overrides the directory used to persist raw feed downloads.
+// WithStorageDir overrides the directory used to persist raw feed downloads
 func WithStorageDir(path string) Option {
 	return func(m *Manager) {
 		if path != "" {
@@ -49,7 +84,7 @@ func WithStorageDir(path string) Option {
 	}
 }
 
-// WithHTTPClient supplies a custom HTTP client for feed downloads.
+// WithHTTPClient supplies a custom HTTP client for feed downloads
 func WithHTTPClient(client *http.Client) Option {
 	return func(m *Manager) {
 		if client != nil {
@@ -58,16 +93,7 @@ func WithHTTPClient(client *http.Client) Option {
 	}
 }
 
-// WithLogger sets the logger used for informational messages.
-func WithLogger(logger *log.Logger) Option {
-	return func(m *Manager) {
-		if logger != nil {
-			m.logger = logger
-		}
-	}
-}
-
-// WithResolverTimeout configures the time limit for DNS lookups during scoring.
+// WithResolverTimeout configures the time limit for DNS lookups during scoring
 func WithResolverTimeout(timeout time.Duration) Option {
 	return func(m *Manager) {
 		if timeout > 0 {
@@ -76,7 +102,7 @@ func WithResolverTimeout(timeout time.Duration) Option {
 	}
 }
 
-// WithResolver allows providing a custom DNS resolver.
+// WithResolver allows providing a custom DNS resolver
 func WithResolver(resolver *net.Resolver) Option {
 	return func(m *Manager) {
 		if resolver != nil {
@@ -85,7 +111,7 @@ func WithResolver(resolver *net.Resolver) Option {
 	}
 }
 
-// WithDNSCacheTTL overrides the TTL used for cached DNS responses.
+// WithDNSCacheTTL overrides the TTL used for cached DNS responses
 func WithDNSCacheTTL(ttl time.Duration) Option {
 	return func(m *Manager) {
 		if ttl > 0 {
@@ -94,10 +120,10 @@ func WithDNSCacheTTL(ttl time.Duration) Option {
 	}
 }
 
-// NewManager creates an intel manager with the provided feed configuration.
+// NewManager creates an intel manager with the provided feed configuration
 func NewManager(cfg FeedConfig, opts ...Option) (*Manager, error) {
 	if len(cfg.Feeds) == 0 {
-		return nil, errors.New("feed configuration has no feeds defined")
+		return nil, ErrNoFeedsDefined
 	}
 
 	manager := &Manager{
@@ -105,12 +131,11 @@ func NewManager(cfg FeedConfig, opts ...Option) (*Manager, error) {
 		store:      newIndicatorStore(),
 		storageDir: "data/intel",
 		httpClient: &http.Client{
-			Timeout: 90 * time.Second,
+			Timeout: defaultRequestTimeout,
 		},
-		logger:          log.New(io.Discard, "", 0),
-		resolverTimeout: 10 * time.Second,
+		resolverTimeout: defaultResolverTimeout,
 		resolver:        net.DefaultResolver,
-		dnsCache:        newDNSCache(5 * time.Minute),
+		dnsCache:        newDNSCache(defaultDNSCacheTTL),
 	}
 
 	for _, opt := range opts {
@@ -118,7 +143,7 @@ func NewManager(cfg FeedConfig, opts ...Option) (*Manager, error) {
 	}
 
 	if manager.dnsCache == nil {
-		manager.dnsCache = newDNSCache(5 * time.Minute)
+		manager.dnsCache = newDNSCache(defaultDNSCacheTTL)
 	}
 	if manager.resolver == nil {
 		manager.resolver = net.DefaultResolver
@@ -127,7 +152,7 @@ func NewManager(cfg FeedConfig, opts ...Option) (*Manager, error) {
 	return manager, nil
 }
 
-// LoadFeedConfig reads a feed configuration from disk.
+// LoadFeedConfig reads a feed configuration from disk
 func LoadFeedConfig(path string) (FeedConfig, error) {
 	file, err := os.Open(filepath.Clean(path))
 	if err != nil {
@@ -138,18 +163,21 @@ func LoadFeedConfig(path string) (FeedConfig, error) {
 	return DecodeFeedConfig(file)
 }
 
-// DecodeFeedConfig parses a feed configuration from an arbitrary reader.
+// DecodeFeedConfig parses a feed configuration from an arbitrary reader
 func DecodeFeedConfig(r io.Reader) (FeedConfig, error) {
 	var cfg FeedConfig
 	if err := json.NewDecoder(r).Decode(&cfg); err != nil {
 		return FeedConfig{}, err
 	}
+
 	if err := cfg.normalize(); err != nil {
 		return FeedConfig{}, err
 	}
+
 	return cfg, nil
 }
 
+// normalize validates and canonicalizes indicator types across all feeds in the config
 func (cfg *FeedConfig) normalize() error {
 	for i := range cfg.Feeds {
 		normalized, err := NormalizeIndicatorTypes(cfg.Feeds[i].Indicators)
@@ -161,19 +189,18 @@ func (cfg *FeedConfig) normalize() error {
 	return nil
 }
 
-// Hydrate downloads all known feeds concurrently and rebuilds the indicator store.
+// Hydrate downloads all known feeds concurrently and rebuilds the indicator store
 func (m *Manager) Hydrate(ctx context.Context) (HydrationSummary, error) {
 	summary := HydrationSummary{
 		StartedAt:  time.Now().UTC(),
 		TotalFeeds: len(m.config.Feeds),
 	}
 
-	if err := os.MkdirAll(m.storageDir, 0o755); err != nil {
+	if err := os.MkdirAll(m.storageDir, storageDirPerm); err != nil {
 		return summary, fmt.Errorf("create storage dir: %w", err)
 	}
 
 	newStore := newIndicatorStore()
-	var storeMu sync.Mutex
 	var summaryMu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -183,28 +210,39 @@ func (m *Manager) Hydrate(ctx context.Context) (HydrationSummary, error) {
 		go func(feed Feed) {
 			defer wg.Done()
 
-			if ctx.Err() != nil {
-				return
-			}
-
 			start := time.Now()
 			feedSummary := FeedSummary{
 				Name: feed.Name,
 				URL:  feed.URL,
 			}
+			defer func() {
+				feedSummary.Duration = time.Since(start)
+				summaryMu.Lock()
+				summary.Feeds = append(summary.Feeds, feedSummary)
+				summaryMu.Unlock()
+			}()
+
+			if ctx.Err() != nil {
+				feedSummary.Error = ctx.Err().Error()
+				summaryMu.Lock()
+				summary.FailedFeeds++
+				summary.ErrorsEncountered = true
+				summaryMu.Unlock()
+				return
+			}
 
 			dest := filepath.Join(m.storageDir, feed.Name+".txt")
 
-			storeMu.Lock()
-			added, err := m.downloadAndIngest(ctx, feed, dest, newStore)
-			storeMu.Unlock()
+			added, usedCachedCopy, err := m.downloadAndIngest(ctx, feed, dest, newStore)
+			feedSummary.UsedCachedCopy = usedCachedCopy
+			feedSummary.Downloaded = err == nil
 
 			if err != nil {
 				feedSummary.Error = err.Error()
 				summaryMu.Lock()
 				summary.ErrorsEncountered = true
 				summaryMu.Unlock()
-				m.logger.Printf("intel hydrate: feed %s encountered an error: %v", feed.Name, err)
+				log.Info().Msgf("intel hydrate: feed %s encountered an error: %v", feed.Name, err)
 			}
 
 			if added > 0 {
@@ -216,7 +254,6 @@ func (m *Manager) Hydrate(ctx context.Context) (HydrationSummary, error) {
 			}
 
 			if err == nil || added > 0 {
-				feedSummary.Downloaded = true
 				summaryMu.Lock()
 				summary.SuccessfulFeeds++
 				summaryMu.Unlock()
@@ -225,18 +262,24 @@ func (m *Manager) Hydrate(ctx context.Context) (HydrationSummary, error) {
 				summary.FailedFeeds++
 				summaryMu.Unlock()
 			}
-
-			feedSummary.Duration = time.Since(start)
-
-			summaryMu.Lock()
-			summary.Feeds = append(summary.Feeds, feedSummary)
-			summaryMu.Unlock()
 		}(feed)
 	}
 
 	wg.Wait()
 
 	summary.CompletedAt = time.Now().UTC()
+
+	sort.SliceStable(summary.Feeds, func(i, j int) bool {
+		return summary.Feeds[i].Name < summary.Feeds[j].Name
+	})
+
+	if err := ctx.Err(); err != nil {
+		return summary, err
+	}
+
+	if newStore.indicatorCount() == 0 {
+		return summary, ErrNoUsableHydrationData
+	}
 
 	m.mu.Lock()
 	m.store = newStore
@@ -247,23 +290,31 @@ func (m *Manager) Hydrate(ctx context.Context) (HydrationSummary, error) {
 	return summary, nil
 }
 
-func (m *Manager) downloadAndIngest(ctx context.Context, feed Feed, dest string, store *indicatorStore) (int, error) {
+// downloadAndIngest fetches a feed to disk and ingests its indicators, falling back to a cached copy on download failure
+func (m *Manager) downloadAndIngest(
+	ctx context.Context,
+	feed Feed,
+	dest string,
+	store *indicatorStore,
+) (int, bool, error) {
 	if err := m.fetchFeed(ctx, feed, dest); err != nil {
-		// If the download failed but a cached file exists, attempt to ingest it.
+		// If the download failed but a cached file exists, attempt to ingest it
 		if _, statErr := os.Stat(dest); statErr == nil {
-			m.logger.Printf("intel hydrate: using cached copy for %s due to download error: %v", feed.Name, err)
+			log.Info().Msgf("intel hydrate: using cached copy for %s due to download error: %v", feed.Name, err)
 			added, ingestErr := store.ingestFile(dest, feed)
 			if ingestErr != nil {
-				return 0, fmt.Errorf("download failed (%v) and cached ingest failed: %w", err, ingestErr)
+				return 0, true, fmt.Errorf("download failed (%v) and cached ingest failed: %w", err, ingestErr)
 			}
-			return added, fmt.Errorf("download failed, used cached copy: %w", err)
+			return added, true, fmt.Errorf("download failed, used cached copy: %w", err)
 		}
-		return 0, err
+		return 0, false, err
 	}
 
-	return store.ingestFile(dest, feed)
+	added, ingestErr := store.ingestFile(dest, feed)
+	return added, false, ingestErr
 }
 
+// fetchFeed downloads the feed content to the destination path using an atomic temp-file rename
 func (m *Manager) fetchFeed(ctx context.Context, feed Feed, dest string) error {
 	tmp, err := os.CreateTemp(m.storageDir, feed.Name+"-*.tmp")
 	if err != nil {
@@ -285,8 +336,10 @@ func (m *Manager) fetchFeed(ctx context.Context, feed Feed, dest string) error {
 		return err
 	}
 
+	defer func() { _ = resp.Body.Close() }()
+
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d", resp.StatusCode)
+		return fmt.Errorf("status %d: %w", resp.StatusCode, ErrUnexpectedFeedStatus)
 	}
 
 	if err := tmp.Sync(); err != nil {
@@ -300,7 +353,7 @@ func (m *Manager) fetchFeed(ctx context.Context, feed Feed, dest string) error {
 	return os.Rename(tmp.Name(), dest)
 }
 
-// Check evaluates an email/domain against the indicator store and returns a score.
+// Check evaluates an email/domain against the indicator store and returns a score
 func (m *Manager) Check(ctx context.Context, req CheckRequest) (ScoreResult, error) {
 	result := ScoreResult{
 		Domain: strings.TrimSpace(req.Domain),
@@ -346,7 +399,7 @@ func (m *Manager) Check(ctx context.Context, req CheckRequest) (ScoreResult, err
 		if req.IncludeResolvedIPs && (req.AllowsType(IndicatorTypeIP) || req.AllowsType(IndicatorTypeCIDR)) {
 			timeout := m.resolverTimeout
 			if timeout <= 0 {
-				timeout = 10 * time.Second
+				timeout = defaultResolverTimeout
 			}
 			ips, err := m.lookupDomainIPs(ctx, domain, timeout)
 			if err != nil {
@@ -415,7 +468,7 @@ func (m *Manager) Check(ctx context.Context, req CheckRequest) (ScoreResult, err
 
 	score, breakdown := calculateScore(matches)
 
-	// Ensure deterministic ordering for response.
+	// Ensure deterministic ordering for response
 	sort.SliceStable(matches, func(i, j int) bool {
 		if matches[i].Type != matches[j].Type {
 			return matches[i].Type < matches[j].Type
@@ -441,6 +494,7 @@ func (m *Manager) Check(ctx context.Context, req CheckRequest) (ScoreResult, err
 	return result, nil
 }
 
+// calculateScore aggregates category weights from matches and returns a capped score with a sorted breakdown
 func calculateScore(matches []IndicatorMatch) (int, []CategoryWeight) {
 	if len(matches) == 0 {
 		return 0, nil
@@ -468,8 +522,8 @@ func calculateScore(matches []IndicatorMatch) (int, []CategoryWeight) {
 	for _, weight := range categoryScores {
 		total += weight
 	}
-	if total > 100 {
-		total = 100
+	if total > maxScore {
+		total = maxScore
 	}
 
 	breakdown := make([]CategoryWeight, 0, len(categoryScores))
@@ -489,48 +543,41 @@ func calculateScore(matches []IndicatorMatch) (int, []CategoryWeight) {
 	return total, breakdown
 }
 
+// categoryWeight returns the scoring weight assigned to a threat category
 func categoryWeight(cat string) int {
 	switch cat {
 	case "c2":
-		return 30
+		return weightC2
 	case "bot":
-		return 25
+		return weightBot
 	case "suspicious":
-		return 20
+		return weightSuspicious
 	case "tor":
-		return 15
+		return weightTor
 	case "vpn":
-		return 10
+		return weightVPN
 	case "bruteforce":
-		return 15
+		return weightBruteforce
 	case "dc":
-		return 5
+		return weightDC
 	default:
-		return 10
+		return weightDefault
 	}
 }
 
+// deduplicateStrings returns a sorted slice with duplicate and empty strings removed
 func deduplicateStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	var result []string
-	for _, v := range values {
-		if v == "" {
-			continue
-		}
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		result = append(result, v)
-	}
+	result := lo.Uniq(lo.Compact(values))
 	sort.Strings(result)
 	return result
 }
 
+// matchKey produces a deduplication key from an indicator match's type, value, and context
 func matchKey(match IndicatorMatch) string {
 	return string(match.Type) + "|" + match.Value + "|" + match.MatchContext
 }
 
+// lookupDomainIPs resolves a domain to its IP addresses, using the DNS cache when available
 func (m *Manager) lookupDomainIPs(ctx context.Context, domain string, timeout time.Duration) ([]net.IP, error) {
 	if m.dnsCache != nil {
 		return m.dnsCache.lookup(ctx, m.resolver, domain, timeout)
@@ -538,32 +585,22 @@ func (m *Manager) lookupDomainIPs(ctx context.Context, domain string, timeout ti
 	return resolveDomain(ctx, m.resolver, domain)
 }
 
+// buildSummary collects distinct feeds and categories from the matches into a ScoreSummary
 func buildSummary(matches []IndicatorMatch) ScoreSummary {
 	if len(matches) == 0 {
 		return ScoreSummary{}
 	}
-	feedSet := make(map[string]struct{})
-	catSet := make(map[string]struct{})
+	var allFeeds, allCats []string
 	for _, match := range matches {
-		for _, feed := range match.Feeds {
-			if feed != "" {
-				feedSet[feed] = struct{}{}
-			}
-		}
+		allFeeds = append(allFeeds, match.Feeds...)
 		for _, cat := range match.Categories {
 			if cat != "" {
-				catSet[strings.ToLower(cat)] = struct{}{}
+				allCats = append(allCats, strings.ToLower(cat))
 			}
 		}
 	}
-	feeds := make([]string, 0, len(feedSet))
-	for feed := range feedSet {
-		feeds = append(feeds, feed)
-	}
-	categories := make([]string, 0, len(catSet))
-	for cat := range catSet {
-		categories = append(categories, cat)
-	}
+	feeds := lo.Uniq(lo.Compact(allFeeds))
+	categories := lo.Uniq(allCats)
 	sort.Strings(feeds)
 	sort.Strings(categories)
 	return ScoreSummary{
@@ -573,81 +610,56 @@ func buildSummary(matches []IndicatorMatch) ScoreSummary {
 	}
 }
 
-// calculateRiskLevel returns a risk level based on the score.
+// calculateRiskLevel returns a risk level based on the score
 func calculateRiskLevel(score int) string {
 	switch {
 	case score == 0:
 		return "none"
-	case score <= 20:
+	case score <= thresholdLow:
 		return "low"
-	case score <= 50:
+	case score <= thresholdMedium:
 		return "medium"
-	case score <= 75:
+	case score <= thresholdHigh:
 		return "high"
 	default:
 		return "critical"
 	}
 }
 
-// calculateRecommendation returns an action recommendation based on the score.
+// calculateRecommendation returns an action recommendation based on the score
 func calculateRecommendation(score int) string {
 	switch {
 	case score == 0:
 		return "approve"
-	case score <= 20:
+	case score <= thresholdLow:
 		return "approve"
-	case score <= 50:
+	case score <= thresholdMedium:
 		return "review"
-	case score <= 75:
+	case score <= thresholdHigh:
 		return "review"
 	default:
 		return "reject"
 	}
 }
 
-// calculateRiskFlags sets boolean flags based on detected categories.
+// calculateRiskFlags sets boolean flags based on detected categories
 func calculateRiskFlags(categories []string) RiskFlags {
-	flags := RiskFlags{}
-	catSet := make(map[string]struct{})
-	for _, cat := range categories {
-		catSet[strings.ToLower(cat)] = struct{}{}
+	lower := lo.Map(categories, func(c string, _ int) string { return strings.ToLower(c) })
+	return RiskFlags{
+		IsDisposableEmail: lo.Contains(lower, "disposable"),
+		IsTor:             lo.Contains(lower, "tor"),
+		IsVPN:             lo.Contains(lower, "vpn"),
+		IsProxy:           lo.Contains(lower, "proxy"),
+		IsBot:             lo.Contains(lower, "bot"),
+		IsC2:              lo.Contains(lower, "c2"),
+		IsSpam:            lo.Contains(lower, "spam"),
+		IsPhishing:        lo.Contains(lower, "phishing"),
+		IsMalware:         lo.Contains(lower, "malware"),
+		IsBruteforce:      lo.Contains(lower, "bruteforce"),
 	}
-
-	if _, ok := catSet["disposable"]; ok {
-		flags.IsDisposableEmail = true
-	}
-	if _, ok := catSet["tor"]; ok {
-		flags.IsTor = true
-	}
-	if _, ok := catSet["vpn"]; ok {
-		flags.IsVPN = true
-	}
-	if _, ok := catSet["proxy"]; ok {
-		flags.IsProxy = true
-	}
-	if _, ok := catSet["bot"]; ok {
-		flags.IsBot = true
-	}
-	if _, ok := catSet["c2"]; ok {
-		flags.IsC2 = true
-	}
-	if _, ok := catSet["spam"]; ok {
-		flags.IsSpam = true
-	}
-	if _, ok := catSet["phishing"]; ok {
-		flags.IsPhishing = true
-	}
-	if _, ok := catSet["malware"]; ok {
-		flags.IsMalware = true
-	}
-	if _, ok := catSet["bruteforce"]; ok {
-		flags.IsBruteforce = true
-	}
-
-	return flags
 }
 
-// buildReasons creates human-readable reasons for the score.
+// buildReasons creates human-readable reasons for the score
 func buildReasons(matches []IndicatorMatch, breakdown []CategoryWeight) []string {
 	if len(matches) == 0 {
 		return nil
@@ -667,18 +679,18 @@ func buildReasons(matches []IndicatorMatch, breakdown []CategoryWeight) []string
 	}
 
 	categoryDescriptions := map[string]string{
-		"c2":          "Command and control infrastructure",
-		"bot":         "Botnet or malicious bot activity",
-		"suspicious":  "Suspicious or malicious activity",
-		"tor":         "Tor network usage",
-		"vpn":         "VPN service usage",
-		"proxy":       "Proxy service usage",
-		"bruteforce":  "Brute force attack source",
-		"spam":        "Spam or unsolicited messaging",
-		"phishing":    "Phishing or credential theft",
-		"malware":     "Malware distribution or infection",
-		"disposable":  "Disposable or temporary email service",
-		"dc":          "Datacenter or hosting provider",
+		"c2":         "Command and control infrastructure",
+		"bot":        "Botnet or malicious bot activity",
+		"suspicious": "Suspicious or malicious activity",
+		"tor":        "Tor network usage",
+		"vpn":        "VPN service usage",
+		"proxy":      "Proxy service usage",
+		"bruteforce": "Brute force attack source",
+		"spam":       "Spam or unsolicited messaging",
+		"phishing":   "Phishing or credential theft",
+		"malware":    "Malware distribution or infection",
+		"disposable": "Disposable or temporary email service",
+		"dc":         "Datacenter or hosting provider",
 	}
 
 	for _, cw := range breakdown {
@@ -695,6 +707,7 @@ func buildReasons(matches []IndicatorMatch, breakdown []CategoryWeight) []string
 	return reasons
 }
 
+// pluralize returns "s" when count is not 1, for use in human-readable messages
 func pluralize(count int) string {
 	if count == 1 {
 		return ""

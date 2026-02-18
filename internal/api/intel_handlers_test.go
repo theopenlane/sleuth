@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -46,7 +44,6 @@ spam@example.com
 		feedCfg,
 		intel.WithStorageDir(tmpDir),
 		intel.WithHTTPClient(client),
-		intel.WithLogger(log.New(io.Discard, "", 0)),
 	)
 	if err != nil {
 		t.Fatalf("failed to create intel manager: %v", err)
@@ -170,7 +167,6 @@ func TestHandleIntelCheckNotHydrated(t *testing.T) {
 	manager, err := intel.NewManager(
 		feedCfg,
 		intel.WithStorageDir(t.TempDir()),
-		intel.WithLogger(log.New(io.Discard, "", 0)),
 	)
 	if err != nil {
 		t.Fatalf("failed to create intel manager: %v", err)
@@ -200,8 +196,11 @@ func TestHandleIntelCheckNotHydrated(t *testing.T) {
 	if resp.Success {
 		t.Error("expected success=false for not hydrated")
 	}
-	if resp.Error != "threat intelligence feeds have not been hydrated" {
-		t.Errorf("expected not hydrated error, got: %s", resp.Error)
+	if resp.Error == nil {
+		t.Fatal("expected error payload")
+	}
+	if resp.Error.Message != "threat intelligence feeds have not been hydrated" {
+		t.Errorf("expected not hydrated error, got: %s", resp.Error.Message)
 	}
 }
 
@@ -249,7 +248,6 @@ func TestHandleIntelHydrate(t *testing.T) {
 		feedCfg,
 		intel.WithStorageDir(tmpDir),
 		intel.WithHTTPClient(client),
-		intel.WithLogger(log.New(io.Discard, "", 0)),
 	)
 	if err != nil {
 		t.Fatalf("failed to create intel manager: %v", err)
@@ -278,16 +276,16 @@ func TestHandleIntelHydrate(t *testing.T) {
 	if !resp.Success {
 		t.Error("expected success=true")
 	}
-	if resp.Summary == nil {
+	if resp.Data == nil {
 		t.Fatal("expected summary to be non-nil")
 	}
-	if resp.Summary.TotalFeeds != 1 {
-		t.Errorf("expected 1 feed, got %d", resp.Summary.TotalFeeds)
+	if resp.Data.TotalFeeds != 1 {
+		t.Errorf("expected 1 feed, got %d", resp.Data.TotalFeeds)
 	}
-	if resp.Summary.SuccessfulFeeds != 1 {
-		t.Errorf("expected 1 successful feed, got %d", resp.Summary.SuccessfulFeeds)
+	if resp.Data.SuccessfulFeeds != 1 {
+		t.Errorf("expected 1 successful feed, got %d", resp.Data.SuccessfulFeeds)
 	}
-	if resp.Summary.TotalIndicators == 0 {
+	if resp.Data.TotalIndicators == 0 {
 		t.Error("expected indicators to be ingested")
 	}
 }
@@ -340,7 +338,6 @@ func TestHandleIntelCheckWithFlags(t *testing.T) {
 		feedCfg,
 		intel.WithStorageDir(tmpDir),
 		intel.WithHTTPClient(client),
-		intel.WithLogger(log.New(io.Discard, "", 0)),
 	)
 	if err != nil {
 		t.Fatalf("failed to create intel manager: %v", err)

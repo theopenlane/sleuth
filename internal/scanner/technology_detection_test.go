@@ -12,19 +12,19 @@ func TestPerformTechnologyDetection(t *testing.T) {
 	tests := []struct {
 		name         string
 		domain       string
-		wantStatus   string
+		wantStatus   types.CheckStatus
 		wantFindings bool
 	}{
 		{
 			name:         "valid domain with infrastructure",
 			domain:       "cloudflare.com",
-			wantStatus:   "pass",
+			wantStatus:   types.CheckStatusPass,
 			wantFindings: true,
 		},
 		{
 			name:         "invalid domain",
 			domain:       "invalid.domain.that.does.not.exist.example.invalid",
-			wantStatus:   "pass",
+			wantStatus:   types.CheckStatusPass,
 			wantFindings: false,
 		},
 	}
@@ -80,7 +80,7 @@ func TestDetectInfrastructure(t *testing.T) {
 			}
 			result := &types.CheckResult{
 				Findings: []types.Finding{},
-				Metadata: make(map[string]interface{}),
+				Metadata: make(map[string]any),
 			}
 
 			scanner.detectInfrastructure(context.Background(), tt.domain, result)
@@ -101,7 +101,7 @@ func TestDetectInfrastructureNoDuplicates(t *testing.T) {
 	}
 	result := &types.CheckResult{
 		Findings: []types.Finding{},
-		Metadata: make(map[string]interface{}),
+		Metadata: make(map[string]any),
 	}
 
 	scanner.detectInfrastructure(context.Background(), "cloudflare.com", result)
@@ -126,7 +126,7 @@ func TestDetectInfrastructureIPv6Support(t *testing.T) {
 	// Test with a domain that has both IPv4 and IPv6
 	result := &types.CheckResult{
 		Findings: []types.Finding{},
-		Metadata: make(map[string]interface{}),
+		Metadata: make(map[string]any),
 	}
 
 	// Use google.com as it typically has both IPv4 and IPv6

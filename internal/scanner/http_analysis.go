@@ -10,78 +10,93 @@ import (
 	"github.com/theopenlane/sleuth/internal/types"
 )
 
-// performHTTPAnalysis analyzes HTTP services and security headers
-func (s *Scanner) performHTTPAnalysis(ctx context.Context, domain string) *types.CheckResult {
-	result := &types.CheckResult{
-		CheckName: "http_analysis",
-		Status:    "pass",
-		Findings:  []types.Finding{},
-		Metadata:  make(map[string]interface{}),
-	}
+const (
+	// httpRedirectLimit is the maximum number of redirects allowed during HTTP analysis.
+	httpRedirectLimit = 10
+	// bodyReadLimit is the maximum number of bytes to read from an HTTP response body.
+	bodyReadLimit = 100 * 1024
+	// missingHeaderThreshold is the number of missing required security headers that triggers a fail status.
+	missingHeaderThreshold = 2
+)
 
-	// Create HTTP client with timeout
+// performHTTPAnalysis analyzes HTTP services and security headers.
+func (s *Scanner) performHTTPAnalysis(ctx context.Context, domain string) *types.CheckResult {
+	result := newCheckResult("http_analysis")
+
 	client := &http.Client{
 		Timeout: s.options.HTTPTimeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("too many redirects")
+		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+			if len(via) >= httpRedirectLimit {
+				return ErrTooManyRedirects
 			}
 			return nil
 		},
 	}
 
-	// Try HTTPS first, then HTTP
 	protocols := []string{"https", "http"}
-	var resp *http.Response
-	var err error
-	var finalURL string
+	var (
+		resp     *http.Response
+		err      error
+		finalURL string
+	)
+
+	retries := s.options.HTTPRetries + 1
+	if retries < 1 {
+		retries = 1
+	}
 
 	for _, protocol := range protocols {
 		url := fmt.Sprintf("%s://%s", protocol, domain)
-		req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
-		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Sleuth/1.0)")
+		for attempt := 0; attempt < retries; attempt++ {
+			req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+			if reqErr != nil {
+				err = reqErr
+				break
+			}
+			req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Sleuth/1.0)")
 
-		resp, err = client.Do(req)
-		if err == nil {
-			finalURL = resp.Request.URL.String()
-			defer func() { _ = resp.Body.Close() }()
+			resp, err = client.Do(req)
+			if err == nil {
+				finalURL = resp.Request.URL.String()
+				break
+			}
+			if ctx.Err() != nil {
+				break
+			}
+		}
+		if resp != nil {
 			break
 		}
 	}
 
-	if err != nil {
-		result.Status = "error"
-		result.Error = fmt.Sprintf("HTTP request failed: %v", err)
+	if err != nil || resp == nil {
+		markCheckError(result, "HTTP request failed: %v", err)
 		return result
 	}
+	defer func() { _ = resp.Body.Close() }()
 
 	result.Metadata["final_url"] = finalURL
 	result.Metadata["status_code"] = resp.StatusCode
 	result.Metadata["protocol"] = resp.Request.URL.Scheme
+	result.Metadata["retries"] = retries
 
-	// Analyze security headers
 	s.analyzeSecurityHeaders(resp, result)
 
-	// Analyze TLS if HTTPS using tlsx library
 	if resp.Request.URL.Scheme == "https" {
-		s.analyzeTLSWithTLSX(ctx, domain, result)
+		s.analyzeTLSWithTLSX(domain, result)
 	}
 
-	// Read and analyze response body (limited)
-	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 100*1024)) // 100KB limit
-	if err == nil {
+	bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, bodyReadLimit))
+	if readErr == nil {
 		body := string(bodyBytes)
 		s.analyzeResponseBody(body, result)
 		s.detectTechnologies(body, resp.Header, result)
 	}
 
-	// Note: Exposed files are now detected via nuclei templates
-	// Use tags: exposed-panels, exposures, misconfigurations
-
 	return result
 }
 
-// analyzeSecurityHeaders checks for security-related HTTP headers
+// analyzeSecurityHeaders checks for security-related HTTP headers.
 func (s *Scanner) analyzeSecurityHeaders(resp *http.Response, result *types.CheckResult) {
 	headers := map[string]struct {
 		Required bool
@@ -180,17 +195,15 @@ func (s *Scanner) analyzeSecurityHeaders(resp *http.Response, result *types.Chec
 	result.Metadata["security_score"] = fmt.Sprintf("%d/%d headers configured",
 		len(presentHeaders), len(headers))
 
-	if missingCount > 2 {
-		result.Status = "fail"
+	if missingCount > missingHeaderThreshold {
+		markCheckFailed(result)
 	}
 }
 
-
-// analyzeResponseBody analyzes the HTTP response body for issues
+// analyzeResponseBody analyzes the HTTP response body for issues.
 func (s *Scanner) analyzeResponseBody(body string, result *types.CheckResult) {
 	bodyLower := strings.ToLower(body)
 
-	// Check for error pages that might reveal information
 	errorPatterns := map[string]string{
 		"stack trace":    "Stack trace exposed",
 		"database error": "Database error exposed",
@@ -212,4 +225,3 @@ func (s *Scanner) analyzeResponseBody(body string, result *types.CheckResult) {
 		}
 	}
 }
-

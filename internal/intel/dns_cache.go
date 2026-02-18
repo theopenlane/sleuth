@@ -7,21 +7,36 @@ import (
 	"time"
 )
 
+// dnsCache provides a concurrency-safe TTL cache for DNS lookup results
 type dnsCache struct {
-	mu   sync.RWMutex
-	ttl  time.Duration
+	// mu guards concurrent access to the cache data
+	mu sync.RWMutex
+	// ttl is the time-to-live for cached DNS entries
+	ttl time.Duration
+	// data maps domain names to their cached DNS lookup results
 	data map[string]dnsCacheEntry
 }
 
+// dnsCacheEntry holds the cached result and expiry for a single domain lookup
 type dnsCacheEntry struct {
-	ips     []net.IP
-	err     error
+	// ips holds the resolved IP addresses from the DNS lookup
+	ips []net.IP
+	// err holds any error returned by the DNS lookup
+	err error
+	// expires is the time at which this cache entry becomes stale
 	expires time.Time
 }
 
+// defaultCacheTTL is the fallback TTL used when a non-positive value is supplied
+const defaultCacheTTL = 5 * time.Minute
+
+// defaultLookupTimeout is the fallback timeout used for DNS resolution
+const defaultLookupTimeout = 10 * time.Second
+
+// newDNSCache creates a new DNS cache with the given TTL, falling back to a default if non-positive
 func newDNSCache(ttl time.Duration) *dnsCache {
 	if ttl <= 0 {
-		ttl = 5 * time.Minute
+		ttl = defaultCacheTTL
 	}
 	return &dnsCache{
 		ttl:  ttl,
@@ -29,6 +44,7 @@ func newDNSCache(ttl time.Duration) *dnsCache {
 	}
 }
 
+// lookup resolves a domain using the cache, performing a fresh DNS query when the entry is missing or expired
 func (c *dnsCache) lookup(ctx context.Context, resolver *net.Resolver, domain string, timeout time.Duration) ([]net.IP, error) {
 	now := time.Now()
 	c.mu.RLock()
@@ -39,7 +55,7 @@ func (c *dnsCache) lookup(ctx context.Context, resolver *net.Resolver, domain st
 	}
 
 	if timeout <= 0 {
-		timeout = 10 * time.Second
+		timeout = defaultLookupTimeout
 	}
 	resolverCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -57,6 +73,7 @@ func (c *dnsCache) lookup(ctx context.Context, resolver *net.Resolver, domain st
 	return ips, err
 }
 
+// resolveDomain performs a DNS lookup for the given domain and returns the resolved IP addresses
 func resolveDomain(ctx context.Context, resolver *net.Resolver, domain string) ([]net.IP, error) {
 	res := resolver
 	if res == nil {
@@ -77,6 +94,7 @@ func resolveDomain(ctx context.Context, resolver *net.Resolver, domain string) (
 	return ips, nil
 }
 
+// cloneIPs returns a deep copy of the provided IP slice to prevent mutation of cached data
 func cloneIPs(src []net.IP) []net.IP {
 	if len(src) == 0 {
 		return nil

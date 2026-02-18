@@ -1,7 +1,6 @@
 package scanner
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -12,17 +11,26 @@ import (
 	"github.com/theopenlane/sleuth/internal/types"
 )
 
+const (
+	// defaultTLSTimeout is the fallback timeout in seconds for TLS connections
+	defaultTLSTimeout = 10
+	// tlsRetries is the number of retry attempts for TLS connections
+	tlsRetries = 2
+	// hoursPerDay is used to convert hours to days for certificate expiry checks
+	hoursPerDay = 24
+)
+
 // analyzeTLSWithTLSX analyzes TLS/SSL configuration using tlsx library
-func (s *Scanner) analyzeTLSWithTLSX(ctx context.Context, domain string, result *types.CheckResult) {
+func (s *Scanner) analyzeTLSWithTLSX(domain string, result *types.CheckResult) {
 	// Create tlsx options
 	timeout := int(s.options.HTTPTimeout.Seconds())
 	if timeout <= 0 {
-		timeout = 10
+		timeout = defaultTLSTimeout
 	}
 
 	options := &clients.Options{
 		Timeout:    timeout,
-		Retries:    2,
+		Retries:    tlsRetries,
 		Expired:    true,
 		SelfSigned: true,
 		MisMatched: true,
@@ -58,7 +66,7 @@ func (s *Scanner) analyzeTLSWithTLSX(ctx context.Context, domain string, result 
 	}
 
 	// Build TLS metadata
-	tlsInfo := make(map[string]interface{})
+	tlsInfo := make(map[string]any)
 
 	// TLS version analysis
 	if response.Version != "" {
@@ -90,7 +98,7 @@ func (s *Scanner) analyzeTLSWithTLSX(ctx context.Context, domain string, result 
 		// Check for weak ciphers
 		cipherLower := strings.ToLower(response.Cipher)
 		if strings.Contains(cipherLower, "rc4") || strings.Contains(cipherLower, "des") ||
-		   strings.Contains(cipherLower, "md5") || strings.Contains(cipherLower, "null") {
+			strings.Contains(cipherLower, "md5") || strings.Contains(cipherLower, "null") {
 			result.Findings = append(result.Findings, types.Finding{
 				Severity:    "critical",
 				Type:        "weak_cipher",
@@ -101,7 +109,7 @@ func (s *Scanner) analyzeTLSWithTLSX(ctx context.Context, domain string, result 
 	}
 
 	// Certificate analysis
-	certInfo := make(map[string]interface{})
+	certInfo := make(map[string]any)
 
 	if response.SubjectDN != "" {
 		certInfo["subject"] = response.SubjectDN
@@ -131,7 +139,7 @@ func (s *Scanner) analyzeTLSWithTLSX(ctx context.Context, domain string, result 
 
 	// Check for expiring certificate
 	if !response.NotAfter.IsZero() && !response.Expired {
-		daysUntilExpiry := int(time.Until(response.NotAfter).Hours() / 24)
+		daysUntilExpiry := int(time.Until(response.NotAfter).Hours() / hoursPerDay)
 		if daysUntilExpiry > 0 && daysUntilExpiry < 30 {
 			result.Findings = append(result.Findings, types.Finding{
 				Severity:    "high",

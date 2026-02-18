@@ -2,6 +2,7 @@ package intel
 
 import (
 	"net"
+	"net/url"
 	"regexp"
 	"strings"
 	"unicode"
@@ -14,7 +15,7 @@ var (
 	emailRegex  = regexp.MustCompile(`^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$`)
 )
 
-// parseIndicator attempts to extract an indicator from a raw feed line.
+// parseIndicator attempts to extract an indicator from a raw feed line
 func parseIndicator(line string) (string, IndicatorType) {
 	cleaned := sanitizeLine(line)
 	if cleaned == "" {
@@ -54,9 +55,30 @@ func parseIndicator(line string) (string, IndicatorType) {
 		return lower, IndicatorTypeDomain
 	}
 
+	if host := extractHostFromURL(lower); host != "" && domainRegex.MatchString(host) {
+		return host, IndicatorTypeDomain
+	}
+
 	return "", ""
 }
 
+// extractHostFromURL attempts to parse a URL and return its hostname without port
+func extractHostFromURL(raw string) string {
+	if !strings.Contains(raw, "://") {
+		return ""
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+
+	host := parsed.Hostname()
+
+	return strings.TrimSuffix(host, ".")
+}
+
+// splitFields tokenizes a line by whitespace, commas, semicolons, and pipes
 func splitFields(input string) []string {
 	return strings.FieldsFunc(input, func(r rune) bool {
 		switch {
@@ -70,6 +92,7 @@ func splitFields(input string) []string {
 	})
 }
 
+// sanitizeLine trims whitespace and strips trailing comments from a raw feed line
 func sanitizeLine(line string) string {
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -86,6 +109,7 @@ func sanitizeLine(line string) string {
 	return strings.TrimSpace(line)
 }
 
+// findIPInLine searches a line for an embedded IPv4 or IPv6 address and returns it if found
 func findIPInLine(line string) string {
 	if match := ipv4Regex.FindString(line); match != "" {
 		if ip := net.ParseIP(match); ip != nil && !isPrivateOrInvalidIP(ip, match) {
@@ -100,6 +124,7 @@ func findIPInLine(line string) string {
 	return ""
 }
 
+// isPrivateOrInvalidIP returns true if the IP is loopback, private, multicast, or otherwise non-routable
 func isPrivateOrInvalidIP(ip net.IP, value string) bool {
 	if ip == nil {
 		return true

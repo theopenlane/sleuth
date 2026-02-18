@@ -1,0 +1,32 @@
+server:
+  listen: ":17710"
+  readtimeout: 30s
+  writetimeout: 180s
+  shutdowngraceperiod: 30s
+  maxbodysize: 102400
+
+scanner:
+  timeout: 120s
+  maxsubdomains: 50
+  nucleiseverity:
+    - critical
+    - high
+    - medium
+  verbose: false
+
+intel:
+  feedconfig: config/feed_config.json
+  storagedir: data/intel
+  autohydrate: false
+  requesttimeout: 90s
+  resolvertimeout: 10s
+  dnscachettl: 5m
+
+cloudflare:
+  accountid: ""
+  apitoken: ""
+  requesttimeout: 30s
+
+slack:
+  webhookurl: ""
+  requesttimeout: 10s

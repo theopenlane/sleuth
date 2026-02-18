@@ -2,8 +2,8 @@ package intel
 
 import (
 	"context"
+	"errors"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -97,7 +97,6 @@ func TestManagerHydrateAndCheck(t *testing.T) {
 		cfg,
 		WithStorageDir(dataDir),
 		WithHTTPClient(client),
-		WithLogger(log.New(io.Discard, "", 0)),
 		WithResolverTimeout(50*time.Millisecond),
 		WithDNSCacheTTL(100*time.Millisecond),
 	)
@@ -179,7 +178,6 @@ func TestManagerCheckBeforeHydrate(t *testing.T) {
 	manager, err := NewManager(
 		cfg,
 		WithStorageDir(t.TempDir()),
-		WithLogger(log.New(io.Discard, "", 0)),
 	)
 	if err != nil {
 		t.Fatalf("failed to create manager: %v", err)
@@ -188,5 +186,97 @@ func TestManagerCheckBeforeHydrate(t *testing.T) {
 	_, err = manager.Check(context.Background(), CheckRequest{Domain: "example.com"})
 	if err == nil || err != ErrNotHydrated {
 		t.Fatalf("expected ErrNotHydrated, got %v", err)
+	}
+}
+
+func TestManagerHydratePartialFeedsStillSucceeds(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/good" {
+			_, _ = io.WriteString(w, "203.0.113.10\nmalicious.example.com\n")
+			return
+		}
+
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, "upstream error")
+	}))
+	t.Cleanup(server.Close)
+
+	client := server.Client()
+	client.Timeout = 5 * time.Second
+
+	manager, err := NewManager(
+		FeedConfig{
+			Feeds: []Feed{
+				{Name: "good", URL: server.URL + "/good", Type: []string{"suspicious"}},
+				{Name: "bad", URL: server.URL + "/bad", Type: []string{"suspicious"}},
+			},
+		},
+		WithStorageDir(t.TempDir()),
+		WithHTTPClient(client),
+	)
+	if err != nil {
+		t.Fatalf("failed to create manager: %v", err)
+	}
+
+	summary, err := manager.Hydrate(context.Background())
+	if err != nil {
+		t.Fatalf("expected partial hydration success, got error: %v", err)
+	}
+
+	if summary.SuccessfulFeeds != 1 {
+		t.Fatalf("expected 1 successful feed, got %d", summary.SuccessfulFeeds)
+	}
+	if summary.FailedFeeds != 1 {
+		t.Fatalf("expected 1 failed feed, got %d", summary.FailedFeeds)
+	}
+	if !summary.ErrorsEncountered {
+		t.Fatal("expected hydration summary to record errors")
+	}
+	if summary.TotalIndicators == 0 {
+		t.Fatal("expected indicators from successful feed")
+	}
+
+	check, err := manager.Check(context.Background(), CheckRequest{Domain: "malicious.example.com"})
+	if err != nil {
+		t.Fatalf("expected check to succeed after partial hydration, got error: %v", err)
+	}
+	if len(check.Matches) == 0 {
+		t.Fatal("expected match data after partial hydration")
+	}
+}
+
+func TestManagerHydrateNoUsableDataReturnsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "# comment only\n\n")
+	}))
+	t.Cleanup(server.Close)
+
+	client := server.Client()
+	client.Timeout = 5 * time.Second
+
+	manager, err := NewManager(
+		FeedConfig{
+			Feeds: []Feed{
+				{Name: "empty", URL: server.URL, Type: []string{"suspicious"}},
+			},
+		},
+		WithStorageDir(t.TempDir()),
+		WithHTTPClient(client),
+	)
+	if err != nil {
+		t.Fatalf("failed to create manager: %v", err)
+	}
+
+	summary, err := manager.Hydrate(context.Background())
+	if err == nil || !errors.Is(err, ErrNoUsableHydrationData) {
+		t.Fatalf("expected ErrNoUsableHydrationData, got %v", err)
+	}
+	if summary.TotalIndicators != 0 {
+		t.Fatalf("expected 0 indicators, got %d", summary.TotalIndicators)
+	}
+
+	_, checkErr := manager.Check(context.Background(), CheckRequest{Domain: "example.com"})
+	if checkErr == nil || !errors.Is(checkErr, ErrNotHydrated) {
+		t.Fatalf("expected ErrNotHydrated after unusable hydration, got %v", checkErr)
 	}
 }

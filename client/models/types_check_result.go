@@ -31,7 +31,7 @@ type TypesCheckResult struct {
 	Findings []*TypesFinding `json:"findings"`
 
 	// metadata
-	Metadata interface{} `json:"metadata,omitempty"`
+	Metadata any `json:"metadata,omitempty"`
 
 	// status
 	// Example: pass

@@ -11,7 +11,7 @@ import (
 
 func TestNewRouter(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	router := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	router := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	if router == nil {
 		t.Fatal("Expected router to be created")
@@ -20,7 +20,7 @@ func TestNewRouter(t *testing.T) {
 
 func TestSwaggerEndpoint(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	req := httptest.NewRequest("GET", "/swagger/", nil)
 	w := httptest.NewRecorder()
@@ -35,7 +35,7 @@ func TestSwaggerEndpoint(t *testing.T) {
 
 func TestRootRedirect(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -54,7 +54,7 @@ func TestRootRedirect(t *testing.T) {
 
 func TestPingEndpoint(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	req := httptest.NewRequest("GET", "/ping", nil)
 	w := httptest.NewRecorder()
@@ -72,7 +72,7 @@ func TestPingEndpoint(t *testing.T) {
 
 func TestCORSHeaders(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	req := httptest.NewRequest("OPTIONS", "/api/health", nil)
 	w := httptest.NewRecorder()
@@ -108,7 +108,7 @@ func TestIntegrationWithRealScanner(t *testing.T) {
 	}
 	defer func() { _ = realScanner.Close() }()
 
-	handler := NewRouter(realScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: realScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	// Test that all endpoints are accessible
 	endpoints := []struct {
@@ -119,7 +119,7 @@ func TestIntegrationWithRealScanner(t *testing.T) {
 		{"GET", "/ping", 200},
 		{"GET", "/api/health", 200},
 		{"GET", "/swagger/", 301}, // Swagger redirects
-		{"GET", "/", 302},          // Redirect to UI
+		{"GET", "/", 302},         // Redirect to UI
 	}
 
 	for _, endpoint := range endpoints {

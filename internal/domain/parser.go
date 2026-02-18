@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"fmt"
 	"net/url"
 	"strings"
 
@@ -10,19 +9,26 @@ import (
 
 // Info contains parsed domain information
 type Info struct {
-	Domain    string `json:"domain"`
+	// Domain is the full domain name
+	Domain string `json:"domain"`
+	// Subdomain is the subdomain part if present
 	Subdomain string `json:"subdomain,omitempty"`
-	TLD       string `json:"tld"`
-	SLD       string `json:"sld"`
+	// TLD is the top-level domain
+	TLD string `json:"tld"`
+	// SLD is the second-level domain
+	SLD string `json:"sld"`
 }
+
+// expectedEmailParts is the number of parts expected when splitting an email address on "@"
+const expectedEmailParts = 2
 
 // Parse extracts domain information from an email or domain string
 func Parse(input string) (*Info, error) {
 	// Extract domain from email if @ is present
 	if strings.Contains(input, "@") {
 		parts := strings.Split(input, "@")
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid email format")
+		if len(parts) != expectedEmailParts {
+			return nil, ErrInvalidEmailFormat
 		}
 		input = parts[1]
 	}
@@ -34,7 +40,7 @@ func Parse(input string) (*Info, error) {
 	if strings.Contains(input, "://") {
 		u, err := url.Parse(input)
 		if err != nil {
-			return nil, fmt.Errorf("invalid URL format: %w", err)
+			return nil, ErrInvalidURLFormat
 		}
 		input = u.Host
 	}
@@ -46,12 +52,12 @@ func Parse(input string) (*Info, error) {
 
 	// Basic validation
 	if input == "" || !strings.Contains(input, ".") {
-		return nil, fmt.Errorf("invalid domain format")
+		return nil, ErrInvalidDomainFormat
 	}
 
 	etld1, err := publicsuffix.EffectiveTLDPlusOne(input)
 	if err != nil {
-		return nil, fmt.Errorf("invalid domain format: %w", err)
+		return nil, ErrInvalidDomainFormat
 	}
 
 	tld, _ := publicsuffix.PublicSuffix(input)

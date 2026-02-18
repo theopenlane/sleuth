@@ -9,162 +9,209 @@ import (
 func TestNew(t *testing.T) {
 	cfg := New()
 
-	if cfg.Port != "8080" {
-		t.Errorf("expected default port 8080, got %s", cfg.Port)
+	if cfg.Server.Listen != ":8080" {
+		t.Errorf("expected default listen :8080, got %s", cfg.Server.Listen)
 	}
-	if cfg.ReadTimeout != 30*time.Second {
-		t.Errorf("expected default read timeout 30s, got %v", cfg.ReadTimeout)
+
+	if cfg.Server.ReadTimeout != 30*time.Second {
+		t.Errorf("expected default read timeout 30s, got %v", cfg.Server.ReadTimeout)
 	}
-	if cfg.WriteTimeout != 180*time.Second {
-		t.Errorf("expected default write timeout 180s, got %v", cfg.WriteTimeout)
+
+	if cfg.Server.WriteTimeout != 180*time.Second {
+		t.Errorf("expected default write timeout 180s, got %v", cfg.Server.WriteTimeout)
 	}
-	if cfg.ShutdownTimeout != 30*time.Second {
-		t.Errorf("expected default shutdown timeout 30s, got %v", cfg.ShutdownTimeout)
+
+	if cfg.Server.ShutdownGracePeriod != 30*time.Second {
+		t.Errorf("expected default shutdown grace period 30s, got %v", cfg.Server.ShutdownGracePeriod)
 	}
-	if cfg.ScanTimeout != 120*time.Second {
-		t.Errorf("expected default scan timeout 120s, got %v", cfg.ScanTimeout)
+
+	if cfg.Scanner.Timeout != 120*time.Second {
+		t.Errorf("expected default scan timeout 120s, got %v", cfg.Scanner.Timeout)
 	}
-	if cfg.MaxBodySize != 100*1024 {
-		t.Errorf("expected default max body size 102400, got %d", cfg.MaxBodySize)
+
+	if cfg.Server.MaxBodySize != 102400 {
+		t.Errorf("expected default max body size 102400, got %d", cfg.Server.MaxBodySize)
+	}
+
+	if len(cfg.Scanner.NucleiSeverity) != 3 {
+		t.Errorf("expected 3 default nuclei severity levels, got %d", len(cfg.Scanner.NucleiSeverity))
+	}
+
+	if cfg.Intel.FeedConfig != "config/feed_config.json" {
+		t.Errorf("expected default feed config path, got %s", cfg.Intel.FeedConfig)
+	}
+
+	if cfg.Intel.StorageDir != "data/intel" {
+		t.Errorf("expected default storage dir, got %s", cfg.Intel.StorageDir)
+	}
+
+	if cfg.Cloudflare.RequestTimeout != 30*time.Second {
+		t.Errorf("expected default cloudflare request timeout 30s, got %v", cfg.Cloudflare.RequestTimeout)
+	}
+
+	if cfg.Cloudflare.AccountID != "" {
+		t.Errorf("expected empty default cloudflare account ID, got %s", cfg.Cloudflare.AccountID)
+	}
+
+	if cfg.Slack.RequestTimeout != 10*time.Second {
+		t.Errorf("expected default slack request timeout 10s, got %v", cfg.Slack.RequestTimeout)
+	}
+
+	if cfg.Slack.WebhookURL != "" {
+		t.Errorf("expected empty default slack webhook URL, got %s", cfg.Slack.WebhookURL)
 	}
 }
 
 func TestNewWithEnvVars(t *testing.T) {
-	originalEnv := map[string]string{
-		"SLEUTH_PORT":                   os.Getenv("SLEUTH_PORT"),
-		"SLEUTH_READ_TIMEOUT":           os.Getenv("SLEUTH_READ_TIMEOUT"),
-		"SLEUTH_WRITE_TIMEOUT":          os.Getenv("SLEUTH_WRITE_TIMEOUT"),
-		"SLEUTH_SHUTDOWN_TIMEOUT":       os.Getenv("SLEUTH_SHUTDOWN_TIMEOUT"),
-		"SLEUTH_SCAN_TIMEOUT":           os.Getenv("SLEUTH_SCAN_TIMEOUT"),
-		"SLEUTH_MAX_BODY_SIZE":          os.Getenv("SLEUTH_MAX_BODY_SIZE"),
-		"SLEUTH_INTEL_FEED_CONFIG":      os.Getenv("SLEUTH_INTEL_FEED_CONFIG"),
-		"SLEUTH_INTEL_STORAGE_DIR":      os.Getenv("SLEUTH_INTEL_STORAGE_DIR"),
-		"SLEUTH_INTEL_AUTO_HYDRATE":     os.Getenv("SLEUTH_INTEL_AUTO_HYDRATE"),
-		"SLEUTH_INTEL_REQUEST_TIMEOUT":  os.Getenv("SLEUTH_INTEL_REQUEST_TIMEOUT"),
-		"SLEUTH_INTEL_RESOLVER_TIMEOUT": os.Getenv("SLEUTH_INTEL_RESOLVER_TIMEOUT"),
-		"SLEUTH_INTEL_DNS_CACHE_TTL":    os.Getenv("SLEUTH_INTEL_DNS_CACHE_TTL"),
+	envVars := map[string]string{
+		"SLEUTH_SERVER_LISTEN":              ":9090",
+		"SLEUTH_SERVER_READTIMEOUT":         "45s",
+		"SLEUTH_SERVER_WRITETIMEOUT":        "45s",
+		"SLEUTH_SERVER_SHUTDOWNGRACEPERIOD": "45s",
+		"SLEUTH_SERVER_MAXBODYSIZE":         "204800",
+		"SLEUTH_SCANNER_TIMEOUT":            "120s",
+		"SLEUTH_INTEL_FEEDCONFIG":           "/custom/path/feeds.json",
+		"SLEUTH_INTEL_STORAGEDIR":           "/custom/intel",
+		"SLEUTH_INTEL_AUTOHYDRATE":          "true",
+		"SLEUTH_INTEL_REQUESTTIMEOUT":       "120s",
+		"SLEUTH_INTEL_RESOLVERTIMEOUT":      "20s",
+		"SLEUTH_INTEL_DNSCACHETTL":          "10m",
+		"SLEUTH_CLOUDFLARE_ACCOUNTID":       "test-account-id",
+		"SLEUTH_CLOUDFLARE_APITOKEN":        "test-api-token",
+		"SLEUTH_CLOUDFLARE_REQUESTTIMEOUT":  "60s",
+		"SLEUTH_SLACK_WEBHOOKURL":           "https://hooks.slack.com/test",
+		"SLEUTH_SLACK_REQUESTTIMEOUT":       "15s",
 	}
 
-	t.Cleanup(func() {
-		for key, val := range originalEnv {
-			if val == "" {
-				_ = os.Unsetenv(key)
-			} else {
-				_ = os.Setenv(key, val)
-			}
-		}
-	})
+	for key, val := range envVars {
+		t.Setenv(key, val)
+	}
 
-	_ = os.Setenv("SLEUTH_PORT", "9090")
-	_ = os.Setenv("SLEUTH_READ_TIMEOUT", "45s")
-	_ = os.Setenv("SLEUTH_WRITE_TIMEOUT", "45s")
-	_ = os.Setenv("SLEUTH_SHUTDOWN_TIMEOUT", "45s")
-	_ = os.Setenv("SLEUTH_SCAN_TIMEOUT", "120s")
-	_ = os.Setenv("SLEUTH_MAX_BODY_SIZE", "204800")
-	_ = os.Setenv("SLEUTH_INTEL_FEED_CONFIG", "/custom/path/feeds.json")
-	_ = os.Setenv("SLEUTH_INTEL_STORAGE_DIR", "/custom/intel")
-	_ = os.Setenv("SLEUTH_INTEL_AUTO_HYDRATE", "true")
-	_ = os.Setenv("SLEUTH_INTEL_REQUEST_TIMEOUT", "120s")
-	_ = os.Setenv("SLEUTH_INTEL_RESOLVER_TIMEOUT", "20s")
-	_ = os.Setenv("SLEUTH_INTEL_DNS_CACHE_TTL", "10m")
+	noFile := ""
+	cfg, err := Load(&noFile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	cfg := New()
+	if cfg.Server.Listen != ":9090" {
+		t.Errorf("expected listen :9090, got %s", cfg.Server.Listen)
+	}
 
-	if cfg.Port != "9090" {
-		t.Errorf("expected port 9090, got %s", cfg.Port)
+	if cfg.Server.ReadTimeout != 45*time.Second {
+		t.Errorf("expected read timeout 45s, got %v", cfg.Server.ReadTimeout)
 	}
-	if cfg.ReadTimeout != 45*time.Second {
-		t.Errorf("expected read timeout 45s, got %v", cfg.ReadTimeout)
+
+	if cfg.Server.WriteTimeout != 45*time.Second {
+		t.Errorf("expected write timeout 45s, got %v", cfg.Server.WriteTimeout)
 	}
-	if cfg.WriteTimeout != 45*time.Second {
-		t.Errorf("expected write timeout 45s, got %v", cfg.WriteTimeout)
+
+	if cfg.Server.ShutdownGracePeriod != 45*time.Second {
+		t.Errorf("expected shutdown grace period 45s, got %v", cfg.Server.ShutdownGracePeriod)
 	}
-	if cfg.ShutdownTimeout != 45*time.Second {
-		t.Errorf("expected shutdown timeout 45s, got %v", cfg.ShutdownTimeout)
+
+	if cfg.Server.MaxBodySize != 204800 {
+		t.Errorf("expected max body size 204800, got %d", cfg.Server.MaxBodySize)
 	}
-	if cfg.ScanTimeout != 120*time.Second {
-		t.Errorf("expected scan timeout 120s, got %v", cfg.ScanTimeout)
+
+	if cfg.Intel.FeedConfig != "/custom/path/feeds.json" {
+		t.Errorf("expected intel feed config /custom/path/feeds.json, got %s", cfg.Intel.FeedConfig)
 	}
-	if cfg.MaxBodySize != 204800 {
-		t.Errorf("expected max body size 204800, got %d", cfg.MaxBodySize)
+
+	if cfg.Intel.StorageDir != "/custom/intel" {
+		t.Errorf("expected intel storage dir /custom/intel, got %s", cfg.Intel.StorageDir)
 	}
-	if cfg.IntelFeedConfig != "/custom/path/feeds.json" {
-		t.Errorf("expected intel feed config /custom/path/feeds.json, got %s", cfg.IntelFeedConfig)
-	}
-	if cfg.IntelStorageDir != "/custom/intel" {
-		t.Errorf("expected intel storage dir /custom/intel, got %s", cfg.IntelStorageDir)
-	}
-	if !cfg.IntelAutoHydrate {
+
+	if !cfg.Intel.AutoHydrate {
 		t.Error("expected intel auto hydrate true, got false")
 	}
-	if cfg.IntelRequestTimeout != 120*time.Second {
-		t.Errorf("expected intel request timeout 120s, got %v", cfg.IntelRequestTimeout)
-	}
-	if cfg.IntelResolverTimeout != 20*time.Second {
-		t.Errorf("expected intel resolver timeout 20s, got %v", cfg.IntelResolverTimeout)
-	}
-	if cfg.IntelDNSCacheTTL != 10*time.Minute {
-		t.Errorf("expected intel DNS cache TTL 10m, got %v", cfg.IntelDNSCacheTTL)
-	}
-}
 
-func TestBoolEnvParsing(t *testing.T) {
-	testCases := []struct {
-		name     string
-		value    string
-		expected bool
-	}{
-		{"true string", "true", true},
-		{"True string", "True", true},
-		{"TRUE string", "TRUE", true},
-		{"1 string", "1", true},
-		{"yes string", "yes", true},
-		{"Yes string", "Yes", true},
-		{"false string", "false", false},
-		{"False string", "False", false},
-		{"FALSE string", "FALSE", false},
-		{"0 string", "0", false},
-		{"no string", "no", false},
-		{"No string", "No", false},
-		{"empty string", "", false},
-		{"invalid string", "invalid", false},
+	if cfg.Intel.RequestTimeout != 120*time.Second {
+		t.Errorf("expected intel request timeout 120s, got %v", cfg.Intel.RequestTimeout)
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			_ = os.Setenv("SLEUTH_INTEL_AUTO_HYDRATE", tc.value)
-			t.Cleanup(func() {
-				_ = os.Unsetenv("SLEUTH_INTEL_AUTO_HYDRATE")
-			})
+	if cfg.Intel.ResolverTimeout != 20*time.Second {
+		t.Errorf("expected intel resolver timeout 20s, got %v", cfg.Intel.ResolverTimeout)
+	}
 
-			cfg := New()
-			if cfg.IntelAutoHydrate != tc.expected {
-				t.Errorf("for value %q, expected %v, got %v", tc.value, tc.expected, cfg.IntelAutoHydrate)
-			}
-		})
+	if cfg.Intel.DNSCacheTTL != 10*time.Minute {
+		t.Errorf("expected intel DNS cache TTL 10m, got %v", cfg.Intel.DNSCacheTTL)
+	}
+
+	if cfg.Cloudflare.AccountID != "test-account-id" {
+		t.Errorf("expected cloudflare account ID test-account-id, got %s", cfg.Cloudflare.AccountID)
+	}
+
+	if cfg.Cloudflare.APIToken != "test-api-token" {
+		t.Errorf("expected cloudflare API token test-api-token, got %s", cfg.Cloudflare.APIToken)
+	}
+
+	if cfg.Cloudflare.RequestTimeout != 60*time.Second {
+		t.Errorf("expected cloudflare request timeout 60s, got %v", cfg.Cloudflare.RequestTimeout)
+	}
+
+	if cfg.Slack.WebhookURL != "https://hooks.slack.com/test" {
+		t.Errorf("expected slack webhook URL https://hooks.slack.com/test, got %s", cfg.Slack.WebhookURL)
+	}
+
+	if cfg.Slack.RequestTimeout != 15*time.Second {
+		t.Errorf("expected slack request timeout 15s, got %v", cfg.Slack.RequestTimeout)
 	}
 }
 
-func TestInvalidDurationEnv(t *testing.T) {
-	_ = os.Setenv("SLEUTH_READ_TIMEOUT", "invalid")
-	t.Cleanup(func() {
-		_ = os.Unsetenv("SLEUTH_READ_TIMEOUT")
-	})
+func TestLoadWithMissingFile(t *testing.T) {
+	path := "/nonexistent/path/config.yaml"
+	cfg, err := Load(&path)
+	if err != nil {
+		t.Fatalf("expected no error with missing config file, got %v", err)
+	}
 
-	cfg := New()
-	if cfg.ReadTimeout != 30*time.Second {
-		t.Errorf("expected fallback to default 30s for invalid duration, got %v", cfg.ReadTimeout)
+	if cfg.Server.Listen != ":8080" {
+		t.Errorf("expected default listen :8080 with missing file, got %s", cfg.Server.Listen)
 	}
 }
 
-func TestInvalidInt64Env(t *testing.T) {
-	_ = os.Setenv("SLEUTH_MAX_BODY_SIZE", "not-a-number")
-	t.Cleanup(func() {
-		_ = os.Unsetenv("SLEUTH_MAX_BODY_SIZE")
-	})
+func TestLoadWithYAMLFile(t *testing.T) {
+	content := []byte(`
+server:
+  listen: ":9999"
+  readtimeout: 60s
+scanner:
+  maxsubdomains: 100
+intel:
+  autohydrate: true
+`)
+	tmpFile, err := os.CreateTemp(t.TempDir(), "config-*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
 
-	cfg := New()
-	if cfg.MaxBodySize != 100*1024 {
-		t.Errorf("expected fallback to default 102400 for invalid int64, got %d", cfg.MaxBodySize)
+	if _, err := tmpFile.Write(content); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("failed to close temp file: %v", err)
+	}
+
+	path := tmpFile.Name()
+	cfg, err := Load(&path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Server.Listen != ":9999" {
+		t.Errorf("expected listen :9999, got %s", cfg.Server.Listen)
+	}
+
+	if cfg.Server.ReadTimeout != 60*time.Second {
+		t.Errorf("expected read timeout 60s, got %v", cfg.Server.ReadTimeout)
+	}
+
+	if cfg.Scanner.MaxSubdomains != 100 {
+		t.Errorf("expected max subdomains 100, got %d", cfg.Scanner.MaxSubdomains)
+	}
+
+	if !cfg.Intel.AutoHydrate {
+		t.Error("expected auto hydrate true from YAML, got false")
 	}
 }

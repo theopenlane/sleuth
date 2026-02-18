@@ -1,0 +1,38 @@
+version: "2"
+run:
+  modules-download-mode: readonly
+  tests: false
+  allow-parallel-runners: true
+linters:
+  enable:
+    - bodyclose
+    - err113
+    - gocritic
+    - gosec
+    - misspell
+    - mnd
+    - noctx
+    - revive
+  exclusions:
+    generated: lax
+    warn-unused: true
+    presets:
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - revive
+        text: "var-naming: avoid meaningless package names"
+        path: "internal/(api|types)/"
+    paths:
+      - specs/
+      - client/
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - specs/*
+      - client/*

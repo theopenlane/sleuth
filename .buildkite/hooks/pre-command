@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+
+mkdir -p "${HOME}/.cache/go-build" 2>/dev/null || true
+mkdir -p "${HOME}/.cache/golangci-lint" 2>/dev/null || true
+mkdir -p "${HOME}/.cache/go/pkg/mod" 2>/dev/null || true
+
+export DOCKER_BUILDKIT=1
+
+if ! command -v git >/dev/null 2>&1; then
+    echo "git not found in PATH"
+    exit 1
+fi

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/projectdiscovery/cdncheck"
 	wappalyzer "github.com/projectdiscovery/wappalyzergo"
@@ -12,25 +13,14 @@ import (
 	"github.com/theopenlane/sleuth/internal/types"
 )
 
-// performTechnologyDetection identifies technologies used by the domain
+// performTechnologyDetection identifies technologies used by the domain.
 func (s *Scanner) performTechnologyDetection(ctx context.Context, domain string) *types.CheckResult {
-	result := &types.CheckResult{
-		CheckName: "technology_detection",
-		Status:    "pass",
-		Findings:  []types.Finding{},
-		Metadata:  make(map[string]interface{}),
-	}
-
-	// This method focuses on DNS-based technology detection
-	// HTTP-based detection is handled in performHTTPAnalysis
-
-	// Use cdncheck library for comprehensive CDN, cloud provider, and WAF detection
+	result := newCheckResult("technology_detection")
 	s.detectInfrastructure(ctx, domain, result)
-
 	return result
 }
 
-// detectTechnologies identifies technologies from HTTP headers and body content
+// detectTechnologies identifies technologies from HTTP headers and body content.
 func (s *Scanner) detectTechnologies(body string, headers http.Header, result *types.CheckResult) {
 	client, err := wappalyzer.New()
 	if err != nil {
@@ -52,23 +42,22 @@ func (s *Scanner) detectTechnologies(body string, headers http.Header, result *t
 			Description: fmt.Sprintf("Technology: %s", tech),
 		})
 	}
+
 	result.Metadata["detected_technologies"] = technologies
 }
 
-// detectInfrastructure detects CDN, cloud provider, and WAF using cdncheck library
+// detectInfrastructure detects CDN, cloud provider, and WAF using cdncheck.
 func (s *Scanner) detectInfrastructure(ctx context.Context, domain string, result *types.CheckResult) {
-	// Initialize cdncheck client
 	client := cdncheck.New()
-
-	// Track what we've already reported to avoid duplicates
 	seen := make(map[string]bool)
-
-	// Use context-aware DNS resolver
 	resolver := net.DefaultResolver
 
-	// Check domain via CNAME
-	if cname, err := resolver.LookupCNAME(ctx, domain); err == nil && cname != domain+"." {
-		if matched, provider, itemType, checkErr := client.Check(net.ParseIP(cname)); matched && checkErr == nil && provider != "" {
+	dnsCtx, cancel := s.withDNSTimeout(ctx)
+	defer cancel()
+
+	if cname, err := resolver.LookupCNAME(dnsCtx, domain); err == nil && cname != domain+"." {
+		cnameClean := strings.TrimSuffix(cname, ".")
+		if matched, provider, itemType, checkErr := client.CheckSuffix(cnameClean); matched && checkErr == nil && provider != "" {
 			key := fmt.Sprintf("cname:%s:%s", provider, itemType)
 			if !seen[key] {
 				seen[key] = true
@@ -76,28 +65,28 @@ func (s *Scanner) detectInfrastructure(ctx context.Context, domain string, resul
 					Severity:    "info",
 					Type:        "technology",
 					Description: fmt.Sprintf("%s: %s", itemType, provider),
-					Details:     fmt.Sprintf("CNAME points to %s", cname),
+					Details:     fmt.Sprintf("CNAME points to %s", cnameClean),
 				})
 			}
 		}
 	}
 
-	// Check IPs for cloud provider and CDN detection
-	if ips, err := resolver.LookupIP(ctx, "ip", domain); err == nil && len(ips) > 0 {
+	if ips, err := resolver.LookupIP(dnsCtx, "ip", domain); err == nil && len(ips) > 0 {
 		for _, ip := range ips {
-			// Check both IPv4 and IPv6
 			matched, provider, itemType, checkErr := client.Check(ip)
 			if checkErr == nil && matched && provider != "" {
 				key := fmt.Sprintf("ip:%s:%s:%s", ip.String(), provider, itemType)
-				if !seen[key] {
-					seen[key] = true
-					result.Findings = append(result.Findings, types.Finding{
-						Severity:    "info",
-						Type:        "technology",
-						Description: fmt.Sprintf("%s: %s", itemType, provider),
-						Details:     fmt.Sprintf("IP %s belongs to %s", ip.String(), provider),
-					})
+				if seen[key] {
+					continue
 				}
+
+				seen[key] = true
+				result.Findings = append(result.Findings, types.Finding{
+					Severity:    "info",
+					Type:        "technology",
+					Description: fmt.Sprintf("%s: %s", itemType, provider),
+					Details:     fmt.Sprintf("IP %s belongs to %s", ip.String(), provider),
+				})
 			}
 		}
 	}

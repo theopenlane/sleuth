@@ -137,28 +137,28 @@ func TestMatchIP(t *testing.T) {
 	store.addIndicator("198.51.100.0/24", IndicatorTypeCIDR, feed)
 
 	testCases := []struct {
-		name         string
-		ip           string
+		name          string
+		ip            string
 		expectMatches int
 	}{
 		{
-			name:         "exact ip match",
-			ip:           "203.0.113.10",
+			name:          "exact ip match",
+			ip:            "203.0.113.10",
 			expectMatches: 1,
 		},
 		{
-			name:         "cidr match",
-			ip:           "198.51.100.50",
+			name:          "cidr match",
+			ip:            "198.51.100.50",
 			expectMatches: 1,
 		},
 		{
-			name:         "no match",
-			ip:           "8.8.8.8",
+			name:          "no match",
+			ip:            "8.8.8.8",
 			expectMatches: 0,
 		},
 		{
-			name:         "nil ip",
-			ip:           "",
+			name:          "nil ip",
+			ip:            "",
 			expectMatches: 0,
 		},
 	}
@@ -196,33 +196,33 @@ func TestMatchDomain(t *testing.T) {
 	store.addIndicator("EVIL.EXAMPLE.COM", IndicatorTypeDomain, feed)
 
 	testCases := []struct {
-		name         string
-		domain       string
+		name          string
+		domain        string
 		expectMatches int
 	}{
 		{
-			name:         "exact match",
-			domain:       "malicious.example.com",
+			name:          "exact match",
+			domain:        "malicious.example.com",
 			expectMatches: 1,
 		},
 		{
-			name:         "case insensitive match",
-			domain:       "MALICIOUS.EXAMPLE.COM",
+			name:          "case insensitive match",
+			domain:        "MALICIOUS.EXAMPLE.COM",
 			expectMatches: 1,
 		},
 		{
-			name:         "another match",
-			domain:       "evil.example.com",
+			name:          "another match",
+			domain:        "evil.example.com",
 			expectMatches: 1,
 		},
 		{
-			name:         "no match",
-			domain:       "safe.example.com",
+			name:          "no match",
+			domain:        "safe.example.com",
 			expectMatches: 0,
 		},
 		{
-			name:         "empty domain",
-			domain:       "",
+			name:          "empty domain",
+			domain:        "",
 			expectMatches: 0,
 		},
 	}
@@ -248,33 +248,33 @@ func TestMatchEmail(t *testing.T) {
 	store.addIndicator("PHISHING@EXAMPLE.NET", IndicatorTypeEmail, feed)
 
 	testCases := []struct {
-		name         string
-		email        string
+		name          string
+		email         string
 		expectMatches int
 	}{
 		{
-			name:         "exact match",
-			email:        "spam@example.com",
+			name:          "exact match",
+			email:         "spam@example.com",
 			expectMatches: 1,
 		},
 		{
-			name:         "case insensitive match",
-			email:        "SPAM@EXAMPLE.COM",
+			name:          "case insensitive match",
+			email:         "SPAM@EXAMPLE.COM",
 			expectMatches: 1,
 		},
 		{
-			name:         "another match",
-			email:        "phishing@example.net",
+			name:          "another match",
+			email:         "phishing@example.net",
 			expectMatches: 1,
 		},
 		{
-			name:         "no match",
-			email:        "legitimate@example.com",
+			name:          "no match",
+			email:         "legitimate@example.com",
 			expectMatches: 0,
 		},
 		{
-			name:         "empty email",
-			email:        "",
+			name:          "empty email",
+			email:         "",
 			expectMatches: 0,
 		},
 	}

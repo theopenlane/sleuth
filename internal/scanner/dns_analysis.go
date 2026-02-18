@@ -12,18 +12,13 @@ import (
 	"github.com/theopenlane/sleuth/internal/types"
 )
 
-// performDNSAnalysis performs comprehensive DNS analysis using dnsx library
+// performDNSAnalysis performs comprehensive DNS analysis using dnsx library.
 func (s *Scanner) performDNSAnalysis(ctx context.Context, domain string) *types.CheckResult {
-	result := &types.CheckResult{
-		CheckName: "dns_analysis",
-		Status:    "pass",
-		Findings:  []types.Finding{},
-		Metadata:  make(map[string]interface{}),
-	}
+	result := newCheckResult("dns_analysis")
 
 	dnsResolvers := make([]string, len(s.options.DNSResolvers))
-	for i, r := range s.options.DNSResolvers {
-		dnsResolvers[i] = fmt.Sprintf("udp:%s:53", r)
+	for i, resolver := range s.options.DNSResolvers {
+		dnsResolvers[i] = fmt.Sprintf("udp:%s:53", resolver)
 	}
 
 	client, err := dnsx.New(dnsx.Options{
@@ -39,8 +34,7 @@ func (s *Scanner) performDNSAnalysis(ctx context.Context, domain string) *types.
 		},
 	})
 	if err != nil {
-		result.Status = "error"
-		result.Error = fmt.Sprintf("dnsx init failed: %v", err)
+		markCheckError(result, "dnsx init failed: %v", err)
 		return result
 	}
 
@@ -49,7 +43,7 @@ func (s *Scanner) performDNSAnalysis(ctx context.Context, domain string) *types.
 		return s.performDNSAnalysisNet(ctx, domain)
 	}
 
-	records := make(map[string]interface{})
+	records := make(map[string]any)
 
 	if len(data.A) > 0 {
 		records["A"] = data.A
@@ -65,15 +59,15 @@ func (s *Scanner) performDNSAnalysis(ctx context.Context, domain string) *types.
 		records["CNAME"] = cnameClean
 		result.Metadata["cname_records"] = []string{cnameClean}
 
-		if s.isVulnerableService(cnameClean) {
-			if ips, err := client.Lookup(cnameClean); err != nil || len(ips) == 0 {
+		if fingerprint, ok := s.takeoverFingerprintForCNAME(cnameClean); ok {
+			if confirmed, evidence := s.confirmSubdomainTakeover(ctx, domain, cnameClean, fingerprint); confirmed {
 				result.Findings = append(result.Findings, types.Finding{
 					Severity:    "high",
 					Type:        "cname_takeover",
-					Description: fmt.Sprintf("Potential CNAME takeover vulnerability for %s", domain),
-					Details:     fmt.Sprintf("CNAME points to %s which appears to be unclaimed", cnameClean),
+					Description: fmt.Sprintf("Confirmed CNAME takeover risk for %s", domain),
+					Details:     evidence,
 				})
-				result.Status = "fail"
+				markCheckFailed(result)
 			}
 		}
 	}
@@ -110,24 +104,22 @@ func (s *Scanner) performDNSAnalysis(ctx context.Context, domain string) *types.
 	return result
 }
 
-// performDNSAnalysisNet performs DNS analysis using net package as fallback
+// performDNSAnalysisNet performs DNS analysis using the standard net package as fallback.
 func (s *Scanner) performDNSAnalysisNet(ctx context.Context, domain string) *types.CheckResult {
-	result := &types.CheckResult{
-		CheckName: "dns_analysis",
-		Status:    "pass",
-		Findings:  []types.Finding{},
-		Metadata:  make(map[string]interface{}),
-	}
+	result := newCheckResult("dns_analysis")
+	resolver := net.DefaultResolver
+	records := make(map[string]any)
 
-	records := make(map[string]interface{})
+	dnsCtx, cancel := s.withDNSTimeout(ctx)
+	defer cancel()
 
-	if ips, err := net.LookupIP(domain); err == nil && len(ips) > 0 {
+	if addrs, err := resolver.LookupIPAddr(dnsCtx, domain); err == nil && len(addrs) > 0 {
 		var ipv4s, ipv6s []string
-		for _, ip := range ips {
-			if ip.To4() != nil {
-				ipv4s = append(ipv4s, ip.String())
+		for _, addr := range addrs {
+			if addr.IP.To4() != nil {
+				ipv4s = append(ipv4s, addr.IP.String())
 			} else {
-				ipv6s = append(ipv6s, ip.String())
+				ipv6s = append(ipv6s, addr.IP.String())
 			}
 		}
 		if len(ipv4s) > 0 {
@@ -140,25 +132,25 @@ func (s *Scanner) performDNSAnalysisNet(ctx context.Context, domain string) *typ
 		}
 	}
 
-	if cname, err := net.LookupCNAME(domain); err == nil && cname != domain+"." {
+	if cname, err := resolver.LookupCNAME(dnsCtx, domain); err == nil && cname != domain+"." {
 		cnameClean := strings.TrimSuffix(cname, ".")
 		records["CNAME"] = cnameClean
 		result.Metadata["cname_records"] = []string{cnameClean}
 
-		if s.isVulnerableService(cnameClean) {
-			if _, err := net.LookupHost(cnameClean); err != nil {
+		if fingerprint, ok := s.takeoverFingerprintForCNAME(cnameClean); ok {
+			if confirmed, evidence := s.confirmSubdomainTakeover(ctx, domain, cnameClean, fingerprint); confirmed {
 				result.Findings = append(result.Findings, types.Finding{
 					Severity:    "high",
 					Type:        "cname_takeover",
-					Description: fmt.Sprintf("Potential CNAME takeover vulnerability for %s", domain),
-					Details:     fmt.Sprintf("CNAME points to %s which appears to be unclaimed", cnameClean),
+					Description: fmt.Sprintf("Confirmed CNAME takeover risk for %s", domain),
+					Details:     evidence,
 				})
-				result.Status = "fail"
+				markCheckFailed(result)
 			}
 		}
 	}
 
-	if mxRecords, err := net.LookupMX(domain); err == nil && len(mxRecords) > 0 {
+	if mxRecords, err := resolver.LookupMX(dnsCtx, domain); err == nil && len(mxRecords) > 0 {
 		var mxs []string
 		var mxHosts []string
 		for _, mx := range mxRecords {
@@ -171,13 +163,13 @@ func (s *Scanner) performDNSAnalysisNet(ctx context.Context, domain string) *typ
 		s.analyzeEmailProvider(mxHosts, result)
 	}
 
-	if txtRecords, err := net.LookupTXT(domain); err == nil && len(txtRecords) > 0 {
+	if txtRecords, err := resolver.LookupTXT(dnsCtx, domain); err == nil && len(txtRecords) > 0 {
 		records["TXT"] = txtRecords
 		result.Metadata["txt_records"] = txtRecords
 		s.analyzeTXTRecords(txtRecords, result)
 	}
 
-	if nsRecords, err := net.LookupNS(domain); err == nil && len(nsRecords) > 0 {
+	if nsRecords, err := resolver.LookupNS(dnsCtx, domain); err == nil && len(nsRecords) > 0 {
 		var nss []string
 		for _, ns := range nsRecords {
 			nss = append(nss, strings.TrimSuffix(ns.Host, "."))
@@ -190,18 +182,7 @@ func (s *Scanner) performDNSAnalysisNet(ctx context.Context, domain string) *typ
 	return result
 }
 
-// isVulnerableService checks if a CNAME target is potentially vulnerable to takeover
-func (s *Scanner) isVulnerableService(cname string) bool {
-	cname = strings.ToLower(strings.TrimSuffix(cname, "."))
-	for _, fingerprint := range takeoverFingerprints {
-		if strings.HasSuffix(cname, fingerprint.CNAMEPattern) {
-			return true
-		}
-	}
-	return false
-}
-
-// analyzeEmailProvider identifies email service providers from MX records
+// analyzeEmailProvider identifies email service providers from MX records.
 func (s *Scanner) analyzeEmailProvider(mxHosts []string, result *types.CheckResult) {
 	providers := map[string]string{
 		"google.com":             "Google Workspace",
@@ -219,8 +200,8 @@ func (s *Scanner) analyzeEmailProvider(mxHosts []string, result *types.CheckResu
 
 	for _, mx := range mxHosts {
 		host := strings.ToLower(mx)
-		for domain, provider := range providers {
-			if strings.Contains(host, domain) {
+		for providerDomain, provider := range providers {
+			if strings.Contains(host, providerDomain) {
 				result.Findings = append(result.Findings, types.Finding{
 					Severity:    "info",
 					Type:        "email_provider",
@@ -233,21 +214,21 @@ func (s *Scanner) analyzeEmailProvider(mxHosts []string, result *types.CheckResu
 	}
 }
 
-// analyzeTXTRecords analyzes TXT records for security configurations
+// analyzeTXTRecords analyzes TXT records for security configurations.
 func (s *Scanner) analyzeTXTRecords(txtRecords []string, result *types.CheckResult) {
-	var hasSPF bool
-	var spfRecord string
+	var (
+		hasSPF    bool
+		spfRecord string
+	)
 
 	for _, txt := range txtRecords {
 		lower := strings.ToLower(txt)
 
-		// SPF record analysis
 		if strings.HasPrefix(lower, "v=spf1") {
 			hasSPF = true
 			spfRecord = txt
 			result.Metadata["spf"] = spfRecord
 
-			// Check for weak SPF policies
 			if strings.Contains(lower, "+all") {
 				result.Findings = append(result.Findings, types.Finding{
 					Severity:    "high",
@@ -265,16 +246,14 @@ func (s *Scanner) analyzeTXTRecords(txtRecords []string, result *types.CheckResu
 			}
 		}
 
-		// DMARC record analysis (informational only)
 		if strings.HasPrefix(lower, "v=dmarc1") {
 			result.Metadata["dmarc"] = txt
 		}
 
-		// Domain verification records
 		if strings.Contains(lower, "verification=") ||
 			strings.Contains(lower, "google-site-verification=") ||
 			strings.Contains(lower, "facebook-domain-verification=") ||
-			strings.Contains(lower, "MS=") ||
+			strings.Contains(lower, "ms=") ||
 			strings.Contains(lower, "apple-domain-verification=") {
 			result.Findings = append(result.Findings, types.Finding{
 				Severity:    "info",
@@ -285,7 +264,6 @@ func (s *Scanner) analyzeTXTRecords(txtRecords []string, result *types.CheckResu
 		}
 	}
 
-	// Report missing SPF
 	if !hasSPF {
 		result.Findings = append(result.Findings, types.Finding{
 			Severity:    "medium",

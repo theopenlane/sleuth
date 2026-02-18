@@ -6,62 +6,66 @@ tasks:
     cmds:
       - task --list-all
 
-  build:
-    desc: Build the Sleuth service
+  go:build:
+    desc: Build the sleuth binary
     cmds:
-      - go build -o bin/sleuth main.go
+      - go build -o bin/sleuth .
 
-  run:
-    desc: Run the Sleuth service
+  go:run:
+    desc: Run the sleuth service locally
     cmds:
-      - go run main.go
+      - go run . serve
 
-  test:
+  go:test:
     desc: Run tests
     cmds:
       - go test -v ./...
 
-  test:short:
-    desc: Run tests in short mode (skip integration tests)
+  go:test:short:
+    desc: Run tests in short mode
     cmds:
       - go test -short -v ./...
 
-  test:coverage:
+  go:test:cover:
     desc: Run tests with coverage
     cmds:
       - go test -v -coverprofile=coverage.out ./...
       - go tool cover -html=coverage.out -o coverage.html
 
-  test:race:
+  go:test:race:
     desc: Run tests with race detection
     cmds:
       - go test -race -v ./...
 
-  test:benchmark:
-    desc: Run benchmark tests
-    cmds:
-      - go test -bench=. -benchmem ./...
-
-  lint:
-    desc: Run linters
+  go:lint:
+    desc: Run golangci-lint
     cmds:
       - golangci-lint run
 
-  fmt:
+  go:fmt:
     desc: Format code
     cmds:
       - go fmt ./...
 
-  vet:
+  go:vet:
     desc: Run go vet
     cmds:
       - go vet ./...
 
-  deps:
-    desc: Download dependencies
+  go:tidy:
+    desc: Download and tidy dependencies
+    aliases: [tidy]
     cmds:
       - go mod download
       - go mod tidy
+
+  go:all:
+    desc: Run all go lint and test tasks
+    cmds:
+      - task: go:tidy
+      - task: go:fmt
+      - task: go:lint
+      - task: go:test
 
   docker:build:
     desc: Build Docker image
@@ -69,9 +73,56 @@ tasks:
       - docker build -t sleuth:latest .
 
   docker:run:
-    desc: Run Sleuth in Docker
+    desc: Run sleuth in Docker
     cmds:
       - docker run -p 8080:8080 sleuth:latest
+
+  specs:generate:
+    desc: Generate OpenAPI specifications
+    cmds:
+      - go run github.com/swaggo/swag/cmd/swag@latest init --generalInfo internal/api/handler.go --output specs/
+
+  client:generate:
+    desc: Generate Go client from OpenAPI spec
+    cmds:
+      - cd client && go generate ./...
+
+  generate:
+    desc: Generate OpenAPI specs and client code
+    cmds:
+      - task: specs:generate
+      - task: client:generate
+
+  config:generate:
+    desc: Generate a default configuration file
+    cmds:
+      - mkdir -p config
+      - cmd: |
+          cat > config/.config.yaml << 'EOF'
+          server:
+            address: ":8080"
+            maxBodySize: 1048576
+            scanTimeout: 120s
+          scanner:
+            dnsTimeout: 10s
+            dnsRetries: 3
+            httpTimeout: 30s
+            maxSubdomains: 50
+            subfinderThreads: 10
+            maxConcurrency: 5
+          intel:
+            enabled: true
+            feedConfigPath: config/feeds.json
+            storageDir: data/intel
+            resolverTimeout: 10s
+          EOF
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf bin/
+      - rm -rf specs/
+      - rm -f coverage.out coverage.html
 
   scan:
     desc: Build container and scan a domain
@@ -85,69 +136,8 @@ tasks:
         curl -s -X POST -H "Content-Type: application/json" -d '{"domain":"{{.DOMAIN}}"}' http://localhost:8080/api/scan
       - docker stop sleuth-scan >/dev/null
 
-  docs:
-    desc: Generate OpenAPI documentation
-    cmds:
-      - go run github.com/swaggo/swag/cmd/swag@latest init --generalInfo internal/api/handler.go --output docs/
-
-  docs:serve:
-    desc: Serve OpenAPI documentation locally
-    deps: [docs]
-    vars:
-      PORT: '{{default "8080" .SLEUTH_PORT}}'
-    cmds:
-      - echo "OpenAPI docs available at http://localhost:{{.PORT}}/swagger/"
-      - echo "OpenAPI spec available at http://localhost:{{.PORT}}/swagger/doc.json"
-
-  clean:
-    desc: Clean build artifacts
-    cmds:
-      - rm -rf bin/
-      - rm -rf docs/
-      - rm -f coverage.out coverage.html
-
-  scan:ui:
-    desc: Build container, scan a domain, and open the results in a browser
-    deps: [docker:build]
-    vars:
-      DOMAIN: '{{default "theopenlane.io" .DOMAIN}}'
-    cmds:
-      - docker rm -f sleuth-scan >/dev/null 2>&1 || true
-      - docker run -d --rm -p 8080:8080 --name sleuth-scan sleuth:latest
-      - sleep 2
-      - >
-        curl -s -X POST -H "Content-Type: application/json" -d '{"domain":"{{.DOMAIN}}"}' http://localhost:8080/api/scan >/dev/null
-      - >
-        (xdg-open http://localhost:8080/ui || open http://localhost:8080/ui || true)
-
-  service:start:
-    desc: Start the Sleuth HTTP service locally (background)
-    silent: true
-    cmds:
-      - go run main.go
-
-  service:stop:
-    desc: Stop the locally running Sleuth service
-    silent: true
-    cmds:
-      - ./scripts/service_stop.sh
-
-  service:logs:
-    desc: Tail the Sleuth service logs produced by service:start
-    cmds:
-      - tail -f .tasktmp/sleuth.log
-
-  service:wait:
-    desc: Wait until the Sleuth health endpoint responds
-    vars:
-      URL: '{{default "http://localhost:8080/api/health" .URL}}'
-      RETRIES: '{{default 20 .RETRIES}}'
-      SLEEP: '{{default 1 .SLEEP}}'
-    cmds:
-      - ./scripts/service_wait.sh "{{.URL}}" "{{.RETRIES}}" "{{.SLEEP}}"
-
   call:health:
-    desc: Call the health endpoint and pretty-print response
+    desc: Call the health endpoint
     cmds:
       - curl -s http://localhost:8080/api/health | jq
 
@@ -161,9 +151,21 @@ tasks:
           ./scripts/scan_submit.sh{{if .DOMAIN}} --domain "{{.DOMAIN}}"{{end}}{{if .EMAIL}} --email "{{.EMAIL}}"{{end}}
 
   call:intel-hydrate:
-    desc: Trigger threat intelligence hydration (requires service running)
+    desc: Trigger threat intelligence hydration
     cmds:
       - curl -s -X POST http://localhost:8080/api/intel/hydrate | jq
+
+  call:enrich:
+    desc: Enrich a domain or email via Cloudflare Browser Rendering
+    vars:
+      DOMAIN: '{{default "" .DOMAIN}}'
+      EMAIL: '{{default "" .EMAIL}}'
+      PORT: '{{default "17710" .PORT}}'
+    cmds:
+      - cmd: >
+          curl -s -X POST -H "Content-Type: application/json"
+          -d '{"domain":"{{.DOMAIN}}", "email":"{{.EMAIL}}"}'
+          http://localhost:{{.PORT}}/api/enrich | jq
 
   call:intel-check:
     desc: Score an email/domain against hydrated intel
@@ -175,14 +177,3 @@ tasks:
     cmds:
       - cmd: >
           ./scripts/intel_check.sh{{if .DOMAIN}} --domain "{{.DOMAIN}}"{{end}}{{if .EMAIL}} --email "{{.EMAIL}}"{{end}}{{if .TYPES}} --types "{{.TYPES}}"{{end}} --resolve-ips "{{.RESOLVE_IPS}}"
-
-  verify:
-    desc: Build, start service, verify all endpoints, and stop
-    deps: [build]
-    cmds:
-      - task: service:stop
-        ignore_error: true
-      - task: service:start
-      - task: service:wait
-      - ./scripts/verify.sh
-      - task: service:stop

@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/projectdiscovery/goflags"
 	subfinderrunner "github.com/projectdiscovery/subfinder/v2/pkg/runner"
@@ -13,14 +15,9 @@ import (
 	"github.com/theopenlane/sleuth/internal/types"
 )
 
-// performSubdomainDiscovery performs basic subdomain discovery using common patterns
+// performSubdomainDiscovery performs subdomain discovery and precision takeover checks.
 func (s *Scanner) performSubdomainDiscovery(ctx context.Context, domain string) *types.CheckResult {
-	result := &types.CheckResult{
-		CheckName: "subdomain_discovery",
-		Status:    "pass",
-		Findings:  []types.Finding{},
-		Metadata:  make(map[string]interface{}),
-	}
+	result := newCheckResult("subdomain_discovery")
 
 	buf := &bytes.Buffer{}
 	opts := &subfinderrunner.Options{
@@ -28,45 +25,35 @@ func (s *Scanner) performSubdomainDiscovery(ctx context.Context, domain string) 
 		Sources: goflags.StringSlice(s.options.SubfinderSources),
 		Threads: s.options.SubfinderThreads,
 		Output:  buf,
-		Silent:  true,
+		Silent:  s.options.Silent && !s.options.Verbose,
 	}
 
 	runner, err := subfinderrunner.NewRunner(opts)
 	if err != nil {
-		result.Status = "error"
-		result.Error = fmt.Sprintf("subfinder init failed: %v", err)
+		markCheckError(result, "subfinder init failed: %v", err)
 		return result
 	}
 
 	if err := runner.RunEnumerationWithCtx(ctx); err != nil {
-		result.Status = "error"
-		result.Error = fmt.Sprintf("subfinder run failed: %v", err)
+		markCheckError(result, "subfinder run failed: %v", err)
 		return result
 	}
 
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	var discoveredSubdomains []string
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		discoveredSubdomains = append(discoveredSubdomains, line)
-	}
-
+	discoveredSubdomains := parseDiscoveredSubdomains(buf.String())
 	if limit := s.options.MaxSubdomains; limit > 0 && len(discoveredSubdomains) > limit {
 		discoveredSubdomains = discoveredSubdomains[:limit]
 	}
 
-	var interesting []string
-	for _, sub := range discoveredSubdomains {
-		subOnly := strings.TrimSuffix(sub, "."+domain)
-		if s.isInterestingSubdomain(subOnly) {
-			interesting = append(interesting, sub)
+	interesting := make([]string, 0)
+	for _, subdomain := range discoveredSubdomains {
+		subOnly := strings.TrimSuffix(subdomain, "."+domain)
+		if contextText, ok := s.interestingSubdomainContext(subOnly); ok {
+			interesting = append(interesting, subdomain)
 			result.Findings = append(result.Findings, types.Finding{
 				Severity:    "info",
 				Type:        "interesting_subdomain",
-				Description: fmt.Sprintf("Interesting subdomain discovered: %s", sub),
-				Details:     s.getSubdomainContext(subOnly),
+				Description: fmt.Sprintf("Interesting subdomain discovered: %s", subdomain),
+				Details:     contextText,
 			})
 		}
 	}
@@ -84,105 +71,148 @@ func (s *Scanner) performSubdomainDiscovery(ctx context.Context, domain string) 
 		})
 	}
 
-	s.checkSubdomainTakeovers(discoveredSubdomains, result)
+	s.checkSubdomainTakeovers(ctx, discoveredSubdomains, result)
 
 	return result
 }
 
-// isInterestingSubdomain checks if a subdomain is potentially interesting
-func (s *Scanner) isInterestingSubdomain(subdomain string) bool {
-	interestingPatterns := []string{
-		"admin", "administrator", "api", "app", "auth", "backup", "blog",
-		"cdn", "cms", "cpanel", "dashboard", "db", "demo", "dev", "docs",
-		"ftp", "git", "internal", "jenkins", "jira", "mail", "manage",
-		"old", "panel", "phpmyadmin", "portal", "private", "prometheus",
-		"qa", "redis", "s3", "staging", "stats", "support", "test",
-		"vpn", "wiki", "grafana", "kibana", "elastic", "consul",
-		"vault", "gitlab", "github", "bitbucket", "confluence",
+func parseDiscoveredSubdomains(raw string) []string {
+	lines := strings.Split(strings.TrimSpace(raw), "\n")
+	seen := make(map[string]struct{}, len(lines))
+
+	results := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if _, exists := seen[line]; exists {
+			continue
+		}
+
+		seen[line] = struct{}{}
+		results = append(results, line)
 	}
 
-	for _, pattern := range interestingPatterns {
-		if contains(subdomain, pattern) {
-			return true
-		}
-	}
-	return false
+	sort.Strings(results)
+
+	return results
 }
 
-// getSubdomainContext provides context about why a subdomain is interesting
-func (s *Scanner) getSubdomainContext(subdomain string) string {
-	contexts := map[string]string{
-		"admin":      "Administrative interface",
-		"api":        "API endpoint",
-		"auth":       "Authentication service",
-		"backup":     "Backup service",
-		"cpanel":     "Control panel",
-		"db":         "Database service",
-		"dev":        "Development environment",
-		"ftp":        "File transfer service",
-		"git":        "Source control",
-		"jenkins":    "CI/CD service",
-		"mail":       "Email service",
-		"phpmyadmin": "Database administration",
-		"staging":    "Staging environment",
-		"test":       "Testing environment",
-		"vpn":        "VPN service",
-		"prometheus": "Monitoring service",
-		"grafana":    "Metrics dashboard",
-		"kibana":     "Log analysis",
-		"elastic":    "Search service",
-		"consul":     "Service discovery",
-		"vault":      "Secrets management",
+func (s *Scanner) interestingSubdomainContext(subdomain string) (string, bool) {
+	lower := strings.ToLower(subdomain)
+
+	for _, pattern := range s.options.InterestingSubdomainPatterns {
+		if !strings.Contains(lower, pattern) {
+			continue
+		}
+
+		contextText := s.options.InterestingSubdomainContexts[pattern]
+		if contextText == "" {
+			contextText = "Potentially sensitive service"
+		}
+
+		return contextText, true
 	}
 
-	for pattern, context := range contexts {
-		if contains(subdomain, pattern) {
-			return context
-		}
-	}
-	return "Potentially sensitive service"
+	return "", false
 }
 
-// checkSubdomainTakeovers checks for potential subdomain takeover vulnerabilities
-func (s *Scanner) checkSubdomainTakeovers(subdomains []string, result *types.CheckResult) {
-	// Limit the number of subdomains to check to avoid excessive scanning
-	checkLimit := min(len(subdomains), 20)
+func (s *Scanner) takeoverWorkerCount(checkLimit int) int {
+	if checkLimit <= 0 {
+		return 1
+	}
 
-	for i := range checkLimit {
-		subdomain := subdomains[i]
+	workerCount := checkLimit
+	if s.options.MaxConcurrency > 0 && workerCount > s.options.MaxConcurrency {
+		workerCount = s.options.MaxConcurrency
+	}
+	if s.options.HTTPThreads > 0 && workerCount > s.options.HTTPThreads {
+		workerCount = s.options.HTTPThreads
+	}
+	if workerCount <= 0 {
+		return 1
+	}
 
-		// Query CNAME for this subdomain
-		if cname, err := net.LookupCNAME(subdomain); err == nil && cname != subdomain+"." {
-			cnameClean := strings.TrimSuffix(cname, ".")
-			if s.isVulnerableService(cnameClean) {
-				// Try to resolve the CNAME target
-				if _, err := net.LookupHost(cnameClean); err != nil {
-					result.Findings = append(result.Findings, types.Finding{
-						Severity:    "high",
-						Type:        "subdomain_takeover",
-						Description: fmt.Sprintf("Potential subdomain takeover: %s", subdomain),
-						Details:     fmt.Sprintf("CNAME points to %s which appears to be unclaimed", cnameClean),
-					})
-					result.Status = "fail"
+	return workerCount
+}
+
+// checkSubdomainTakeovers checks for confirmed subdomain takeover vulnerabilities.
+func (s *Scanner) checkSubdomainTakeovers(ctx context.Context, subdomains []string, result *types.CheckResult) {
+	if len(subdomains) == 0 {
+		return
+	}
+
+	checkLimit := len(subdomains)
+	if maxChecks := s.options.MaxSubdomainTakeoverChecks; maxChecks > 0 && checkLimit > maxChecks {
+		checkLimit = maxChecks
+	}
+	if checkLimit <= 0 {
+		return
+	}
+
+	resolver := net.DefaultResolver
+	subset := subdomains[:checkLimit]
+	workers := s.takeoverWorkerCount(checkLimit)
+
+	jobs := make(chan string, checkLimit)
+	out := make(chan types.Finding, checkLimit)
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for subdomain := range jobs {
+				dnsCtx, cancel := s.withDNSTimeout(ctx)
+				cname, err := resolver.LookupCNAME(dnsCtx, subdomain)
+				cancel()
+				if err != nil || cname == subdomain+"." {
+					continue
+				}
+
+				cnameClean := strings.TrimSuffix(cname, ".")
+				fingerprint, ok := s.takeoverFingerprintForCNAME(cnameClean)
+				if !ok {
+					continue
+				}
+
+				confirmed, evidence := s.confirmSubdomainTakeover(ctx, subdomain, cnameClean, fingerprint)
+				if !confirmed {
+					continue
+				}
+
+				out <- types.Finding{
+					Severity:    "high",
+					Type:        "subdomain_takeover",
+					Description: fmt.Sprintf("Confirmed subdomain takeover risk: %s", subdomain),
+					Details:     evidence,
 				}
 			}
-		}
+		}()
 	}
-}
 
-// Helper function to check if a string contains a pattern (case-insensitive)
-func contains(s, pattern string) bool {
-	return len(s) >= len(pattern) &&
-		(s[:len(pattern)] == pattern ||
-			s[len(s)-len(pattern):] == pattern ||
-			findInString(s, pattern))
-}
-
-func findInString(s, pattern string) bool {
-	for i := 0; i <= len(s)-len(pattern); i++ {
-		if s[i:i+len(pattern)] == pattern {
-			return true
-		}
+	for _, subdomain := range subset {
+		jobs <- subdomain
 	}
-	return false
+	close(jobs)
+
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+
+	findings := make([]types.Finding, 0)
+	for finding := range out {
+		findings = append(findings, finding)
+	}
+
+	sort.SliceStable(findings, func(i, j int) bool {
+		return findings[i].Description < findings[j].Description
+	})
+
+	if len(findings) > 0 {
+		result.Findings = append(result.Findings, findings...)
+		markCheckFailed(result)
+	}
 }

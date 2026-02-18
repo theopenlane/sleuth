@@ -1,21 +1,26 @@
 package scanner
 
-// TakeoverFingerprint defines a subdomain takeover service fingerprint.
+// TakeoverFingerprint defines a subdomain takeover service fingerprint
 // This structure contains patterns and fingerprints for detecting potential
-// subdomain takeover vulnerabilities.
+// subdomain takeover vulnerabilities
 type TakeoverFingerprint struct {
-	Service      string   // Service name (e.g., "AWS S3", "Heroku")
-	CNAMEPattern string   // CNAME pattern to match (e.g., ".herokuapp.com")
-	Fingerprints []string // HTTP response fingerprints indicating vulnerability
-	Vulnerable   bool     // Whether this service is currently vulnerable
-	NXDomain     bool     // Whether NXDOMAIN alone indicates vulnerability
+	// Service is the name of the external service (e.g., "AWS S3", "Heroku")
+	Service string
+	// CNAMEPattern is the CNAME pattern to match (e.g., ".herokuapp.com")
+	CNAMEPattern string
+	// Fingerprints holds the HTTP response fingerprints indicating vulnerability
+	Fingerprints []string
+	// Vulnerable indicates whether this service is currently vulnerable to takeover
+	Vulnerable bool
+	// NXDomain indicates whether NXDOMAIN alone is sufficient to confirm vulnerability
+	NXDomain bool
 }
 
-// takeoverFingerprints contains service definitions based on can-i-take-over-xyz.
+// takeoverFingerprints contains service definitions based on can-i-take-over-xyz
 // Source: https://github.com/EdOverflow/can-i-take-over-xyz
 //
 // This list is maintained to help identify potential subdomain takeover vulnerabilities
-// where a subdomain CNAME points to an external service that is unclaimed or deleted.
+// where a subdomain CNAME points to an external service that is unclaimed or deleted
 var takeoverFingerprints = []TakeoverFingerprint{
 	{
 		Service:      "AWS Elastic Beanstalk",
