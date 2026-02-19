@@ -9,11 +9,11 @@ require (
 	github.com/go-openapi/strfmt v0.23.0
 	github.com/go-openapi/swag v0.23.0
 	github.com/miekg/dns v1.1.62
-	github.com/projectdiscovery/cdncheck v1.1.29
+	github.com/projectdiscovery/cdncheck v1.2.9
 	github.com/projectdiscovery/dnsx v1.2.2
 	github.com/projectdiscovery/goflags v0.1.74
 	github.com/projectdiscovery/subfinder/v2 v2.8.0
-	github.com/projectdiscovery/tlsx v1.2.1
+	github.com/projectdiscovery/tlsx v1.2.2
 	github.com/projectdiscovery/wappalyzergo v0.2.42
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/swaggo/swag v1.16.6
@@ -93,7 +93,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.3-0.20240618155329-98d742f6907a // indirect
-	github.com/nwaples/rardecode/v2 v2.0.0-beta.4.0.20241112120701-034e449c6e78 // indirect
+	github.com/nwaples/rardecode/v2 v2.2.0 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
@@ -101,15 +101,15 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/projectdiscovery/blackrock v0.0.1 // indirect
 	github.com/projectdiscovery/chaos-client v0.5.2 // indirect
-	github.com/projectdiscovery/fastdialer v0.4.3 // indirect
-	github.com/projectdiscovery/gologger v1.1.54 // indirect
-	github.com/projectdiscovery/hmap v0.0.92 // indirect
+	github.com/projectdiscovery/fastdialer v0.4.15 // indirect
+	github.com/projectdiscovery/gologger v1.1.59 // indirect
+	github.com/projectdiscovery/hmap v0.0.95 // indirect
 	github.com/projectdiscovery/machineid v0.0.0-20240226150047-2e2c51e35983 // indirect
-	github.com/projectdiscovery/networkpolicy v0.1.18 // indirect
+	github.com/projectdiscovery/networkpolicy v0.1.27 // indirect
 	github.com/projectdiscovery/ratelimit v0.0.81 // indirect
-	github.com/projectdiscovery/retryabledns v1.0.105 // indirect
-	github.com/projectdiscovery/retryablehttp-go v1.0.119 // indirect
-	github.com/projectdiscovery/utils v0.4.22 // indirect
+	github.com/projectdiscovery/retryabledns v1.0.108 // indirect
+	github.com/projectdiscovery/retryablehttp-go v1.0.129 // indirect
+	github.com/projectdiscovery/utils v0.6.0 // indirect
 	github.com/refraction-networking/utls v1.7.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rs/xid v1.5.0 // indirect
@@ -133,7 +133,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/tomnomnom/linkheader v0.0.0-20180905144013-02ca5825eb80 // indirect
-	github.com/ulikunitz/xz v0.5.12 // indirect
+	github.com/ulikunitz/xz v0.5.15 // indirect
 	github.com/weppos/publicsuffix-go v0.40.3-0.20250408071509-6074bbe7fd39 // indirect
 	github.com/yuin/goldmark v1.7.4 // indirect
 	github.com/yuin/goldmark-emoji v1.0.3 // indirect
