@@ -1,5 +1,9 @@
 version: '3'
 
+includes:
+  config:
+    taskfile: ./jsonschema/Taskfile.yaml
+
 tasks:
   default:
     desc: Show available tasks
@@ -93,29 +97,11 @@ tasks:
       - task: specs:generate
       - task: client:generate
 
-  config:generate:
-    desc: Generate a default configuration file
+  config:init:
+    desc: Create a local .config.yaml from the example (run config:generate first)
     cmds:
-      - mkdir -p config
-      - cmd: |
-          cat > config/.config.yaml << 'EOF'
-          server:
-            address: ":8080"
-            maxBodySize: 1048576
-            scanTimeout: 120s
-          scanner:
-            dnsTimeout: 10s
-            dnsRetries: 3
-            httpTimeout: 30s
-            maxSubdomains: 50
-            subfinderThreads: 10
-            maxConcurrency: 5
-          intel:
-            enabled: true
-            feedConfigPath: config/feeds.json
-            storageDir: data/intel
-            resolverTimeout: 10s
-          EOF
+      - cp config/config.example.yaml config/.config.yaml
+      - echo "Created config/.config.yaml — edit with your local settings"
 
   clean:
     desc: Clean build artifacts
@@ -126,7 +112,7 @@ tasks:
 
   scan:
     desc: Build container and scan a domain
-    deps: [docker:build]
+    deps: ['docker:build']
     vars:
       DOMAIN: '{{default "theopenlane.io" .DOMAIN}}'
     cmds:
@@ -148,8 +134,7 @@ tasks:
       EMAIL: '{{default "" .EMAIL}}'
     cmds:
       - cmd: >
-          ./scripts/scan_submit.sh{{if .DOMAIN}} --domain "{{.DOMAIN}}"{{end}}{{if .EMAIL}} --email "{{.EMAIL}}"{{end}}
-
+          ./scripts/scan_submit.sh{{if .DOMAIN}} --domain "{{.DOMAIN}}"{{end}}{{if .EMAIL}} --email "{{.EMAIL}}"{{end}} #magic___^_^___line
   call:intel-hydrate:
     desc: Trigger threat intelligence hydration
     cmds:
@@ -163,10 +148,7 @@ tasks:
       PORT: '{{default "17710" .PORT}}'
     cmds:
       - cmd: >
-          curl -s -X POST -H "Content-Type: application/json"
-          -d '{"domain":"{{.DOMAIN}}", "email":"{{.EMAIL}}"}'
-          http://localhost:{{.PORT}}/api/enrich | jq
-
+          curl -s -X POST -H "Content-Type: application/json" -d '{"domain":"{{.DOMAIN}}", "email":"{{.EMAIL}}"}' http://localhost:{{.PORT}}/api/enrich | jq #magic___^_^___line
   call:intel-check:
     desc: Score an email/domain against hydrated intel
     vars:
@@ -176,4 +158,10 @@ tasks:
       RESOLVE_IPS: '{{default "false" .RESOLVE_IPS}}'
     cmds:
       - cmd: >
-          ./scripts/intel_check.sh{{if .DOMAIN}} --domain "{{.DOMAIN}}"{{end}}{{if .EMAIL}} --email "{{.EMAIL}}"{{end}}{{if .TYPES}} --types "{{.TYPES}}"{{end}} --resolve-ips "{{.RESOLVE_IPS}}"
+          ./scripts/intel_check.sh{{if .DOMAIN}} --domain "{{.DOMAIN}}"{{end}}{{if .EMAIL}} --email "{{.EMAIL}}"{{end}}{{if .TYPES}} --types "{{.TYPES}}"{{end}} --resolve-ips "{{.RESOLVE_IPS}}" #magic___^_^___line
+  precommit-full:
+    desc: Lint the project against all files
+    cmds:
+      - pre-commit install && pre-commit install-hooks
+      - pre-commit autoupdate
+      - pre-commit run --show-diff-on-failure --color=always --all-files

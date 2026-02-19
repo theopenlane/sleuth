@@ -123,7 +123,7 @@ paths:
     get:
       description: Returns the health status of the Sleuth service
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: OK
@@ -131,23 +131,23 @@ paths:
             $ref: '#/definitions/api.HealthResponse'
       summary: Health check
       tags:
-      - health
+        - health
   /scan:
     post:
       consumes:
-      - application/json
+        - application/json
       description: |-
         Performs comprehensive security and technology analysis on a domain
         Accepts either an email address (domain extracted) or direct domain
       parameters:
-      - description: Scan request containing email or domain
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/api.ScanRequest'
+        - description: Scan request containing email or domain
+          in: body
+          name: request
+          required: true
+          schema:
+            $ref: '#/definitions/api.ScanRequest'
       produces:
-      - application/json
+        - application/json
       responses:
         "200":
           description: OK
@@ -167,8 +167,8 @@ paths:
             $ref: '#/definitions/api.ErrorResponse'
       summary: Scan domain
       tags:
-      - scan
+        - scan
 schemes:
-- http
-- https
+  - http
+  - https
 swagger: "2.0"

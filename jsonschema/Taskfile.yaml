@@ -1,0 +1,12 @@
+version: '3'
+
+tasks:
+  generate:
+    desc: generate the jsonschema and config example files
+    cmds:
+      - task: schema
+
+  schema:
+    desc: generate jsonschema, config.example.yaml, and .env.example
+    cmds:
+      - go run jsonschema/schema_generator.go

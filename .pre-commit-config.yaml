@@ -8,12 +8,14 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: data/*
+
       - id: detect-private-key
   - repo: https://github.com/google/yamlfmt
     rev: v0.21.0
     hooks:
       - id: yamlfmt
   - repo: https://github.com/adhtruong/mirrors-typos
-    rev: v1.42.1
+    rev: v1.43.5
     hooks:
       - id: typos

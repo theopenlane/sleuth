@@ -83,7 +83,7 @@ type Cloudflare struct {
 	// AccountID is the Cloudflare account identifier
 	AccountID string `json:"accountid" koanf:"accountid"`
 	// APIToken is the bearer token for Cloudflare API authentication
-	APIToken string `json:"apitoken" koanf:"apitoken"`
+	APIToken string `json:"apitoken" koanf:"apitoken" sensitive:"true"`
 	// RequestTimeout is the timeout for Cloudflare API requests
 	RequestTimeout time.Duration `json:"requesttimeout" koanf:"requesttimeout" default:"30s"`
 }
@@ -91,7 +91,7 @@ type Cloudflare struct {
 // Slack contains Slack webhook configuration
 type Slack struct {
 	// WebhookURL is the Slack incoming webhook URL
-	WebhookURL string `json:"webhookurl" koanf:"webhookurl"`
+	WebhookURL string `json:"webhookurl" koanf:"webhookurl" sensitive:"true"`
 	// RequestTimeout is the timeout for Slack webhook requests
 	RequestTimeout time.Duration `json:"requesttimeout" koanf:"requesttimeout" default:"10s"`
 }
