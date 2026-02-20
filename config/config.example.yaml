@@ -1,0 +1,28 @@
+cloudflare:
+    accountid: ""
+    apitoken: ""
+    requesttimeout: 30s
+intel:
+    autohydrate: false
+    dnscachettl: 5m0s
+    feedconfig: config/feed_config.json
+    requesttimeout: 1m30s
+    resolvertimeout: 10s
+    storagedir: data/intel
+scanner:
+    maxsubdomains: 50
+    nucleiseverity:
+        - critical
+        - high
+        - medium
+    timeout: 2m0s
+    verbose: false
+server:
+    listen: :8080
+    maxbodysize: 102400
+    readtimeout: 30s
+    shutdowngraceperiod: 30s
+    writetimeout: 3m0s
+slack:
+    requesttimeout: 10s
+    webhookurl: ""

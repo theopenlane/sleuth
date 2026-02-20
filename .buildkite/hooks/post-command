@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+
+if [[ -n "${BUILDKITE_BUILD_PATH:-}" ]]; then
+    find "${BUILDKITE_BUILD_PATH}" -name "*.tmp" -type f -delete 2>/dev/null || true
+fi
+
+if command -v docker >/dev/null 2>&1; then
+    docker container prune -f >/dev/null 2>&1 || true
+    docker image prune -f >/dev/null 2>&1 || true
+fi

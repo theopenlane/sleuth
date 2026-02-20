@@ -1,9 +1,13 @@
-
 {
 	"feeds": [
 		{
 			"name": "alienvault_reputation_generic",
 			"url": "https://reputation.alienvault.com/reputation.generic",
+			"type": ["suspicious"]
+		},
+		{
+			"name": "alienvault_reputation",
+			"url": "https://reputation.alienvault.com/reputation.data",
 			"type": ["suspicious"]
 		},
 		{
@@ -38,8 +42,14 @@
 			"indicators": ["domain"]
 		},
 		{
-			"name": "phishtank_verified_domains",
-			"url": "https://raw.githubusercontent.com/arnydo/phishtank-domain-list/master/domain_list.txt",
+			"name": "openphish_community",
+			"url": "https://openphish.com/feed.txt",
+			"type": ["phishing", "suspicious"],
+			"indicators": ["domain"]
+		},
+		{
+			"name": "cert_pl_phishing",
+			"url": "https://hole.cert.pl/domains/domains.txt",
 			"type": ["phishing", "suspicious"],
 			"indicators": ["domain"]
 		},
@@ -56,21 +66,20 @@
 			"indicators": ["domain"]
 		},
 		{
-			"name": "urlhaus_domainlist",
-			"url": "https://urlhaus.abuse.ch/downloads/domainlist.txt",
-			"type": ["malware", "phishing", "suspicious"],
-			"indicators": ["domain"]
+			"name": "urlhaus_online",
+			"url": "https://urlhaus.abuse.ch/downloads/text_online/",
+			"type": ["malware", "suspicious"]
 		},
 		{
-			"name": "bbcan177_malicious_domains",
-			"url": "https://raw.githubusercontent.com/BBcan177/BBcan177/master/blacklists/domain.txt",
-			"type": ["suspicious"],
-			"indicators": ["domain"]
-		},
-		{
-			"name": "disposable_email_blacklist",
-			"url": "https://raw.githubusercontent.com/andreis/disposable-email-domains/master/disposable_email_blacklist.txt",
+			"name": "disposable_email_domains",
+			"url": "https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/main/disposable_email_blocklist.conf",
 			"type": ["disposable", "suspicious"],
+			"indicators": ["domain"]
+		},
+		{
+			"name": "wesbos_burner_emails",
+			"url": "https://raw.githubusercontent.com/wesbos/burner-email-providers/master/emails.txt",
+			"type": ["disposable"],
 			"indicators": ["domain"]
 		},
 		{
@@ -83,8 +92,7 @@
 			"name": "danger_rulez_blocklist",
 			"url": "https://danger.rulez.sk/projects/bruteforceblocker/blist.php",
 			"type": ["suspicious"]
-		}
-		,
+		},
 		{
 			"name": "darklist_blocklist",
 			"url": "https://www.darklist.de/raw.php",
@@ -148,21 +156,6 @@
 		{
 			"name": "feodotracker_abusech_botnet",
 			"url": "https://feodotracker.abuse.ch/downloads/ipblocklist_aggressive.txt",
-			"type": ["suspicious"]
-		},
-		{
-			"name": "3coresec_bruteforce_ssh",
-			"url": "https://blacklist.3coresec.net/lists/ssh.txt",
-			"type":["bruteforce"]
-		},
-		{
-			"name": "3coresec_http_attacks",
-			"url": "https://blacklist.3coresec.net/lists/http.txt",
-			"type": ["suspicious"]
-		},
-		{
-			"name": "3coresec_scan_exploit",
-			"url": "https://blacklist.3coresec.net/lists/misc.txt",
 			"type": ["suspicious"]
 		},
 		{
@@ -286,11 +279,6 @@
 			"type": ["spam"]
 		},
 		{
-			"name": "kriskintel_malicious_ips",
-			"url": "https://kriskintel.com/feeds/ktip_malicious_Ips.txt",
-			"type": ["suspicious"]
-		},
-		{
 			"name": "myip_blocklist_latest",
 			"url": "https://myip.ms/files/blacklist/htaccess/latest_blacklist.txt",
 			"type": ["suspicious"]
@@ -328,21 +316,6 @@
 		{
 			"name": "stamparm_github_level3_up",
 			"url": "https://raw.githubusercontent.com/stamparm/ipsum/master/levels/3.txt",
-			"type": ["suspicious"]
-		},
-		{
-			"name": "talos_blocklist",
-			"url": "https://www.talosintelligence.com/documents/ip-blacklist",
-			"type": ["suspicious"]
-		},
-		{
-			"name": "charles_thehaleys_ssh_attack",
-			"url": "https://charles.the-haleys.org/ssh_dico_attack_with_timestamps.php?days=30",
-			"type": ["bruteforce"]
-		},
-		{
-			"name": "alienvault_reputation",
-			"url": "https://reputation.alienvault.com/reputation.data",
 			"type": ["suspicious"]
 		},
 		{
@@ -416,11 +389,6 @@
 			"type": ["suspicious"]
 		},
 		{
-			"name": "firehol_et_compromised",
-			"url": "https://iplists.firehol.org/files/et_compromised.ipset",
-			"type": ["suspicious"]
-		},
-		{
 			"name": "dyndns_ponmocup",
 			"url": "https://iplists.firehol.org/files/dyndns_ponmocup.ipset",
 			"type": ["suspicious"]
@@ -436,19 +404,19 @@
 			"type": ["suspicious"]
 		},
 		{
-			"name": "beesting_honeypot",
-			"url": "https://beesting.tools/",
-			"type": ["suspicious"]
-		},
-		{
 			"name": "drb_nord_vpn",
 			"url": "https://raw.githubusercontent.com/drb-ra/C2IntelFeeds/master/vpn/NordVPNIPs.csv",
 			"type": ["vpn"]
 		},
 		{
-			"name": "drb_proton_vpn",
-			"url": "https://raw.githubusercontent.com/drb-ra/C2IntelFeeds/master/vpn/ProtonVPNIPs.csv",
+			"name": "x4bnet_vpn",
+			"url": "https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv4.txt",
 			"type": ["vpn"]
+		},
+		{
+			"name": "x4bnet_datacenter",
+			"url": "https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/datacenter/ipv4.txt",
+			"type": ["suspicious"]
 		},
 		{
 			"name": "drb_c2_30days",
@@ -466,16 +434,6 @@
 			"type": ["c2"]
 		},
 		{
-			"name": "mirai_bots_1000",
-			"url": "https://mirai.security.gives/data/ip_list.txt",
-			"type": ["bot"]
-		},
-		{
-			"name": "ssl_blacklist_aggressive",
-			"url": "https://sslbl.abuse.ch/blacklist/sslipblacklist_aggressive.txt",
-			"type": ["bot"]
-		},
-		{
 			"name": "criticalpathsecurity_illuminate",
 			"url": "https://raw.githubusercontent.com/CriticalPathSecurity/Public-Intelligence-Feeds/master/illuminate.txt",
 			"type": ["suspicious"]
@@ -491,11 +449,6 @@
 			"type": ["suspicious"]
 		},
 		{
-			"name": "rodanmaharjan_c2_1",
-			"url": "https://github.com/rodanmaharjan/ThreatIntelligence/raw/main/C2%20IOC.txt",
-			"type": ["c2"]
-		},
-		{
 			"name": "rodanmaharjan_c2_2",
 			"url": "https://github.com/rodanmaharjan/ThreatIntelligence/raw/main/CobaltStrike.txt",
 			"type": ["c2"]
@@ -506,11 +459,6 @@
 			"type": ["suspicious"]
 		},
 		{
-			"name": "rodanmaharjan_c2_4",
-			"url": "https://github.com/rodanmaharjan/ThreatIntelligence/raw/main/blackcat%20ransomware.txt",
-			"type": ["suspicious"]
-		},
-		{
 			"name": "rodanmaharjan_c2_5",
 			"url": "https://raw.githubusercontent.com/rodanmaharjan/ThreatIntelligence/main/Mirai.txt",
 			"type": ["bot"]
@@ -518,11 +466,6 @@
 		{
 			"name": "rst_threats_all",
 			"url": "https://raw.githubusercontent.com/elliotwutingfeng/rstthreatsall/main/ioc_ip_short_all.txt",
-			"type": ["suspicious"]
-		},
-		{
-			"name": "digitalside_osint",
-			"url": "https://osint.digitalside.it/Threat-Intel/lists/latestips.txt",
 			"type": ["suspicious"]
 		},
 		{

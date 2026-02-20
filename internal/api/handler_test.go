@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -70,7 +69,7 @@ func (m *MockScanner) Close() error {
 
 func TestHandleHealth(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	req := httptest.NewRequest("GET", "/api/health", nil)
 	w := httptest.NewRecorder()
@@ -101,7 +100,7 @@ func TestHandleHealth(t *testing.T) {
 
 func TestHandleScan_ValidDomain(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	requestBody := ScanRequest{
 		Domain: "example.com",
@@ -138,7 +137,7 @@ func TestHandleScan_ValidDomain(t *testing.T) {
 
 func TestHandleScan_ValidEmail(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	requestBody := ScanRequest{
 		Email:      "test@example.com",
@@ -162,7 +161,11 @@ func TestHandleScan_ValidEmail(t *testing.T) {
 	}
 
 	if !response.Success {
-		t.Errorf("Expected success=true, got %v (error: %s)", response.Success, response.Error)
+		if response.Error != nil {
+			t.Errorf("Expected success=true, got %v (error: %s)", response.Success, response.Error.Message)
+		} else {
+			t.Errorf("Expected success=true, got %v", response.Success)
+		}
 	}
 
 	if response.Data == nil {
@@ -176,7 +179,7 @@ func TestHandleScan_ValidEmail(t *testing.T) {
 
 func TestHandleScan_InvalidMethod(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	req := httptest.NewRequest("GET", "/api/scan", nil)
 	w := httptest.NewRecorder()
@@ -190,7 +193,7 @@ func TestHandleScan_InvalidMethod(t *testing.T) {
 
 func TestHandleScan_InvalidJSON(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	req := httptest.NewRequest("POST", "/api/scan", bytes.NewBufferString("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
@@ -211,14 +214,14 @@ func TestHandleScan_InvalidJSON(t *testing.T) {
 		t.Error("Expected success=false for invalid JSON")
 	}
 
-	if response.Error == "" {
+	if response.Error == nil || response.Error.Message == "" {
 		t.Error("Expected error message")
 	}
 }
 
 func TestHandleScan_InvalidEmail(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	requestBody := ScanRequest{
 		Email: "invalid-email-format",
@@ -247,7 +250,7 @@ func TestHandleScan_InvalidEmail(t *testing.T) {
 
 func TestHandleScan_MissingDomainAndEmail(t *testing.T) {
 	mockScanner := NewMockScanner(false, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	requestBody := ScanRequest{}
 
@@ -274,7 +277,7 @@ func TestHandleScan_MissingDomainAndEmail(t *testing.T) {
 
 func TestHandleScan_ScannerError(t *testing.T) {
 	mockScanner := NewMockScanner(true, 0)
-	handler := NewRouter(mockScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: mockScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	requestBody := ScanRequest{
 		Domain: "example.com",
@@ -287,8 +290,8 @@ func TestHandleScan_ScannerError(t *testing.T) {
 
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", w.Code)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500, got %d", w.Code)
 	}
 
 	var response ScanResponse
@@ -300,15 +303,15 @@ func TestHandleScan_ScannerError(t *testing.T) {
 		t.Error("Expected success=false when scanner returns error")
 	}
 
-	if response.Error == "" {
+	if response.Error == nil || response.Error.Message == "" {
 		t.Error("Expected error message when scanner fails")
 	}
 }
 
-func TestRespondWithError(t *testing.T) {
+func TestRespondScanError(t *testing.T) {
 	w := httptest.NewRecorder()
 
-	respondWithError(w, "test error", http.StatusTeapot)
+	respondScanError(w, http.StatusTeapot, errCodeInternal, "test error")
 
 	if w.Code != http.StatusTeapot {
 		t.Errorf("Expected status 418, got %d", w.Code)
@@ -323,8 +326,16 @@ func TestRespondWithError(t *testing.T) {
 		t.Error("Expected success=false")
 	}
 
-	if response.Error != "test error" {
-		t.Errorf("Expected error 'test error', got %s", response.Error)
+	if response.Error == nil {
+		t.Fatal("Expected error payload")
+	}
+
+	if response.Error.Message != "test error" {
+		t.Errorf("Expected error 'test error', got %s", response.Error.Message)
+	}
+
+	if response.Error.Code != errCodeInternal {
+		t.Errorf("Expected error code %q, got %q", errCodeInternal, response.Error.Code)
 	}
 
 	if response.Data != nil {
@@ -394,9 +405,12 @@ func TestHandleIntelHydrateAndCheck(t *testing.T) {
 		t.Fatalf("failed to decode hydrate response: %v", err)
 	}
 	if !hydrate.Success {
-		t.Fatalf("expected hydrate success, got error: %s", hydrate.Error)
+		if hydrate.Error != nil {
+			t.Fatalf("expected hydrate success, got error: %s", hydrate.Error.Message)
+		}
+		t.Fatal("expected hydrate success")
 	}
-	if hydrate.Summary == nil || hydrate.Summary.SuccessfulFeeds == 0 {
+	if hydrate.Data == nil || hydrate.Data.SuccessfulFeeds == 0 {
 		t.Fatal("expected feed summary with successful hydration")
 	}
 
@@ -414,7 +428,10 @@ func TestHandleIntelHydrateAndCheck(t *testing.T) {
 		t.Fatalf("failed to decode intel check response: %v", err)
 	}
 	if !intelResp.Success {
-		t.Fatalf("expected success response, got error: %s", intelResp.Error)
+		if intelResp.Error != nil {
+			t.Fatalf("expected success response, got error: %s", intelResp.Error.Message)
+		}
+		t.Fatal("expected success response")
 	}
 	if intelResp.Data == nil || len(intelResp.Data.Matches) == 0 {
 		t.Fatal("expected match data in response")
@@ -439,10 +456,10 @@ func TestHandleScan_Integration(t *testing.T) {
 	}
 	defer func() { _ = realScanner.Close() }()
 
-	handler := NewRouter(realScanner, nil, 1024, 60*time.Second)
+	handler := NewRouter(RouterConfig{Scanner: realScanner, MaxBodySize: 1024, ScanTimeout: 60 * time.Second})
 
 	requestBody := ScanRequest{
-		Email: "test@example.com",
+		Domain: "example.com",
 	}
 
 	body, _ := json.Marshal(requestBody)
@@ -462,7 +479,11 @@ func TestHandleScan_Integration(t *testing.T) {
 	}
 
 	if !response.Success {
-		t.Errorf("Expected success=true, got error: %s", response.Error)
+		if response.Error != nil {
+			t.Errorf("Expected success=true, got error: %s", response.Error.Message)
+		} else {
+			t.Error("Expected success=true")
+		}
 	}
 
 	if response.Data == nil {
@@ -500,7 +521,6 @@ func newTestIntelManager(t *testing.T, feedData string) (*intel.Manager, func())
 		},
 		intel.WithStorageDir(t.TempDir()),
 		intel.WithHTTPClient(client),
-		intel.WithLogger(log.New(io.Discard, "", 0)),
 		intel.WithResolverTimeout(50*time.Millisecond),
 		intel.WithDNSCacheTTL(100*time.Millisecond),
 	)

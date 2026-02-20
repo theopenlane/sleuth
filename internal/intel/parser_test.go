@@ -63,6 +63,35 @@ func TestIsPrivateOrInvalidIP(t *testing.T) {
 	}
 }
 
+func TestParseIndicatorURL(t *testing.T) {
+	testCases := []struct {
+		name          string
+		input         string
+		expectedValue string
+		expectedType  IndicatorType
+	}{
+		{"https url", "https://evil.example.com/phish", "evil.example.com", IndicatorTypeDomain},
+		{"http url", "http://malware.badsite.org/payload.exe", "malware.badsite.org", IndicatorTypeDomain},
+		{"url with port", "https://phish.test.io:8443/login", "phish.test.io", IndicatorTypeDomain},
+		{"url with path and query", "https://scam.example.net/page?id=1", "scam.example.net", IndicatorTypeDomain},
+		{"bare domain still works", "example.com", "example.com", IndicatorTypeDomain},
+		{"ip address still works", "8.8.8.8", "8.8.8.8", IndicatorTypeIP},
+		{"url with ip host", "http://93.184.216.34/malware", "93.184.216.34", IndicatorTypeIP},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			value, typ := parseIndicator(tc.input)
+			if value != tc.expectedValue {
+				t.Errorf("expected value %q, got %q", tc.expectedValue, value)
+			}
+			if typ != tc.expectedType {
+				t.Errorf("expected type %q, got %q", tc.expectedType, typ)
+			}
+		})
+	}
+}
+
 func TestSplitFields(t *testing.T) {
 	testCases := []struct {
 		input    string

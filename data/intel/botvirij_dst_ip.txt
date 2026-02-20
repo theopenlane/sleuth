@@ -1,0 +1,10 @@
+# IOClist - ip-dst 
+#
+# Use these IOCs at your own risk.
+#
+# See : http://www.botvrij.eu
+#
+95.179.213.0 # ip-dst - The Chrysalis Backdoor: A Deep Dive into Lotus Blossom’s toolkit (479)
+61.4.102.97 # ip-dst - The Chrysalis Backdoor: A Deep Dive into Lotus Blossom’s toolkit (479)
+59.110.7.32 # ip-dst - The Chrysalis Backdoor: A Deep Dive into Lotus Blossom’s toolkit (479)
+124.222.137.114 # ip-dst - The Chrysalis Backdoor: A Deep Dive into Lotus Blossom’s toolkit (479)

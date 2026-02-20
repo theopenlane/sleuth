@@ -40,3 +40,6 @@ Thumbs.db
 *.temp
 *.log
 .tasktmp/
+.claude
+*.config*yaml
+config/.config.yaml

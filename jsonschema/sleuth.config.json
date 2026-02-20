@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/theopenlane/sleuth/config/config",
+  "$defs": {
+    "Cloudflare": {
+      "properties": {
+        "accountid": {
+          "type": "string",
+          "description": "AccountID is the Cloudflare account identifier"
+        },
+        "apitoken": {
+          "type": "string",
+          "description": "APIToken is the bearer token for Cloudflare API authentication"
+        },
+        "requesttimeout": {
+          "type": "integer",
+          "description": "RequestTimeout is the timeout for Cloudflare API requests"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Cloudflare contains Cloudflare API configuration"
+    },
+    "Intel": {
+      "properties": {
+        "feedconfig": {
+          "type": "string",
+          "description": "FeedConfig is the path to the feed configuration JSON file"
+        },
+        "storagedir": {
+          "type": "string",
+          "description": "StorageDir is the directory for storing downloaded feed data"
+        },
+        "autohydrate": {
+          "type": "boolean",
+          "description": "AutoHydrate enables automatic feed hydration on startup"
+        },
+        "requesttimeout": {
+          "type": "integer",
+          "description": "RequestTimeout is the timeout for individual feed download requests"
+        },
+        "resolvertimeout": {
+          "type": "integer",
+          "description": "ResolverTimeout is the timeout for DNS lookups during scoring"
+        },
+        "dnscachettl": {
+          "type": "integer",
+          "description": "DNSCacheTTL is the TTL for cached DNS responses"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Intel contains threat intelligence configuration"
+    },
+    "Scanner": {
+      "properties": {
+        "timeout": {
+          "type": "integer",
+          "description": "Timeout is the maximum duration for a scan operation"
+        },
+        "maxsubdomains": {
+          "type": "integer",
+          "description": "MaxSubdomains is the maximum number of subdomains to enumerate"
+        },
+        "nucleiseverity": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "NucleiSeverity is the list of nuclei severity levels to scan for"
+        },
+        "verbose": {
+          "type": "boolean",
+          "description": "Verbose enables verbose scanner output"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Scanner contains domain scanner configuration"
+    },
+    "Server": {
+      "properties": {
+        "listen": {
+          "type": "string",
+          "description": "Listen sets the address and port to serve on"
+        },
+        "readtimeout": {
+          "type": "integer",
+          "description": "ReadTimeout is the maximum duration for reading the entire request"
+        },
+        "writetimeout": {
+          "type": "integer",
+          "description": "WriteTimeout is the maximum duration before timing out writes of the response"
+        },
+        "shutdowngraceperiod": {
+          "type": "integer",
+          "description": "ShutdownGracePeriod is the grace period for in-flight requests before shutting down"
+        },
+        "maxbodysize": {
+          "type": "integer",
+          "description": "MaxBodySize is the maximum allowed request body size in bytes"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Server contains HTTP server configuration"
+    },
+    "Slack": {
+      "properties": {
+        "webhookurl": {
+          "type": "string",
+          "description": "WebhookURL is the Slack incoming webhook URL"
+        },
+        "requesttimeout": {
+          "type": "integer",
+          "description": "RequestTimeout is the timeout for Slack webhook requests"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Slack contains Slack webhook configuration"
+    }
+  },
+  "properties": {
+    "server": {
+      "$ref": "#/$defs/Server",
+      "description": "Server contains HTTP server settings"
+    },
+    "scanner": {
+      "$ref": "#/$defs/Scanner",
+      "description": "Scanner contains domain scanner settings"
+    },
+    "intel": {
+      "$ref": "#/$defs/Intel",
+      "description": "Intel contains threat intelligence settings"
+    },
+    "cloudflare": {
+      "$ref": "#/$defs/Cloudflare",
+      "description": "Cloudflare contains Cloudflare API settings"
+    },
+    "slack": {
+      "$ref": "#/$defs/Slack",
+      "description": "Slack contains Slack webhook settings"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "description": "Config contains the configuration for the sleuth service"
+}

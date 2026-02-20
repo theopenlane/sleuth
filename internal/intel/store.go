@@ -7,28 +7,48 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+
+	"github.com/samber/lo"
 )
 
+// indicatorStore holds all ingested threat indicators indexed by type for fast lookup
 type indicatorStore struct {
-	ip     map[string]*indicatorRecord
-	cidr   []*cidrRecord
+	// mu guards concurrent access to store maps during hydration.
+	mu sync.RWMutex
+	// ip maps IP address strings to their indicator records for exact-match lookups
+	ip map[string]*indicatorRecord
+	// cidr holds CIDR network records for range-based IP matching
+	cidr []*cidrRecord
+	// domain maps domain name strings to their indicator records
 	domain map[string]*indicatorRecord
-	email  map[string]*indicatorRecord
-	total  int
+	// email maps email address strings to their indicator records
+	email map[string]*indicatorRecord
+	// total tracks the cumulative number of indicators added to the store
+	total int
 }
 
+// indicatorRecord tracks a single indicator value along with its associated categories and feeds
 type indicatorRecord struct {
-	value      string
-	typ        IndicatorType
+	// value is the normalized indicator string
+	value string
+	// typ is the classification of this indicator
+	typ IndicatorType
+	// categories holds the set of threat categories associated with this indicator
 	categories map[string]struct{}
-	feeds      map[string]struct{}
+	// feeds holds the set of feed names that contributed this indicator
+	feeds map[string]struct{}
 }
 
+// cidrRecord pairs a parsed CIDR network with its indicator record for range-based IP matching
 type cidrRecord struct {
+	// network is the parsed CIDR network used for IP containment checks
 	network *net.IPNet
-	record  *indicatorRecord
+	// record is the indicator metadata associated with this CIDR range
+	record *indicatorRecord
 }
 
+// newIndicatorStore creates an empty indicator store with initialized maps
 func newIndicatorStore() *indicatorStore {
 	return &indicatorStore{
 		ip:     make(map[string]*indicatorRecord),
@@ -37,7 +57,11 @@ func newIndicatorStore() *indicatorStore {
 	}
 }
 
+// addIndicator inserts or merges an indicator into the store, returning true if it was accepted
 func (s *indicatorStore) addIndicator(value string, typ IndicatorType, feed Feed) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if value == "" {
 		return false
 	}
@@ -88,9 +112,11 @@ func (s *indicatorStore) addIndicator(value string, typ IndicatorType, feed Feed
 	rec.feeds = rec.feedsOrInit()
 	rec.feeds[feed.Name] = struct{}{}
 	s.total++
+
 	return true
 }
 
+// ensureRecord returns an existing record for the key or creates and inserts a new one
 func (s *indicatorStore) ensureRecord(m map[string]*indicatorRecord, key string, typ IndicatorType) *indicatorRecord {
 	if existing, ok := m[key]; ok {
 		return existing
@@ -102,9 +128,11 @@ func (s *indicatorStore) ensureRecord(m map[string]*indicatorRecord, key string,
 		feeds:      make(map[string]struct{}),
 	}
 	m[key] = rec
+
 	return rec
 }
 
+// feedsOrInit lazily initializes and returns the feeds map for the record
 func (r *indicatorRecord) feedsOrInit() map[string]struct{} {
 	if r.feeds == nil {
 		r.feeds = make(map[string]struct{})
@@ -112,6 +140,7 @@ func (r *indicatorRecord) feedsOrInit() map[string]struct{} {
 	return r.feeds
 }
 
+// ingestFile reads a feed file line by line, parses indicators, and adds them to the store
 func (s *indicatorStore) ingestFile(path string, feed Feed) (int, error) {
 	file, err := os.Open(filepath.Clean(path))
 	if err != nil {
@@ -122,7 +151,8 @@ func (s *indicatorStore) ingestFile(path string, feed Feed) (int, error) {
 	scanner := bufio.NewScanner(file)
 	// Increase buffer to handle long lines (e.g., CSV rows)
 	const maxCapacity = 2 * 1024 * 1024
-	buf := make([]byte, 0, 64*1024)
+	const initialBufCapacity = 64 * 1024
+	buf := make([]byte, 0, initialBufCapacity)
 	scanner.Buffer(buf, maxCapacity)
 
 	var added int
@@ -144,7 +174,11 @@ func (s *indicatorStore) ingestFile(path string, feed Feed) (int, error) {
 	return added, nil
 }
 
+// matchIP returns all indicator matches for the given IP, including exact and CIDR range hits
 func (s *indicatorStore) matchIP(ip net.IP) []IndicatorMatch {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	if ip == nil {
 		return nil
 	}
@@ -161,7 +195,11 @@ func (s *indicatorStore) matchIP(ip net.IP) []IndicatorMatch {
 	return matches
 }
 
+// matchDomain returns an indicator match if the domain exists in the store
 func (s *indicatorStore) matchDomain(domain string) []IndicatorMatch {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	if domain == "" {
 		return nil
 	}
@@ -171,7 +209,11 @@ func (s *indicatorStore) matchDomain(domain string) []IndicatorMatch {
 	return nil
 }
 
+// matchEmail returns an indicator match if the email exists in the store
 func (s *indicatorStore) matchEmail(email string) []IndicatorMatch {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	if email == "" {
 		return nil
 	}
@@ -181,16 +223,20 @@ func (s *indicatorStore) matchEmail(email string) []IndicatorMatch {
 	return nil
 }
 
+// indicatorCount returns the number of indicators stored.
+func (s *indicatorStore) indicatorCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.total
+}
+
+// recordToMatch converts an indicatorRecord into an IndicatorMatch for external consumption
 func recordToMatch(rec *indicatorRecord) IndicatorMatch {
-	match := IndicatorMatch{
-		Value: rec.value,
-		Type:  rec.typ,
+	return IndicatorMatch{
+		Value:      rec.value,
+		Type:       rec.typ,
+		Categories: lo.Keys(rec.categories),
+		Feeds:      lo.Keys(rec.feeds),
 	}
-	for c := range rec.categories {
-		match.Categories = append(match.Categories, c)
-	}
-	for f := range rec.feeds {
-		match.Feeds = append(match.Feeds, f)
-	}
-	return match
 }

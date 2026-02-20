@@ -22,7 +22,7 @@ type PostScanReader struct {
 }
 
 // ReadResponse reads a server response into the received o.
-func (o *PostScanReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
+func (o *PostScanReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (any, error) {
 	switch response.Code() {
 	case 200:
 		result := NewPostScanOK()

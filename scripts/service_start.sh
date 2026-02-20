@@ -18,7 +18,7 @@ fi
 echo "Starting Sleuth service..."
 (
   cd "$ROOT_DIR"
-  go run main.go
+  ./bin/sleuth serve
 ) >"$LOG_FILE" 2>&1 &
 pid=$!
 echo "$pid" >"$PID_FILE"
