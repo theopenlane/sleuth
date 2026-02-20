@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/theopenlane/sleuth/internal/cloudflare"
+	"github.com/theopenlane/sleuth/internal/compliance"
 	"github.com/theopenlane/sleuth/internal/intel"
 	"github.com/theopenlane/sleuth/internal/scanner"
 	"github.com/theopenlane/sleuth/internal/slack"
@@ -43,6 +44,8 @@ type Handler struct {
 	intel *intel.Manager
 	// enricher provides domain enrichment via Cloudflare Browser Rendering.
 	enricher *cloudflare.Client
+	// discoverer performs compliance page discovery via httpx.
+	discoverer compliance.Discoverer
 	// notifier sends notifications to Slack via webhook.
 	notifier *slack.Client
 	// maxBodySize limits the size of incoming request bodies.

@@ -20,7 +20,7 @@ COPY --from=builder /app/config /config
 COPY --from=builder /app/specs /specs
 COPY --from=builder /app/ui /ui
 
-EXPOSE 8080
+EXPOSE 17710
 
 ENTRYPOINT ["/bin/sleuth"]
 CMD ["serve"]

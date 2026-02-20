@@ -42,11 +42,36 @@ const (
 	weightDC         = 5
 	weightDefault    = 10
 
+	// Email authentication weight constants
+	weightMissingSPF   = 15
+	weightWeakSPF      = 20
+	weightMissingDMARC = 15
+	weightWeakDMARC    = 10
+	weightMissingDKIM  = 10
+
+	// Domain age weight constants
+	weightNewDomain7d   = 25
+	weightNewDomain30d  = 20
+	weightNewDomain90d  = 15
+	weightNewDomain365d = 10
+
 	// Score thresholds for risk level and recommendation classification
 	thresholdLow    = 20
 	thresholdMedium = 50
 	thresholdHigh   = 75
 )
+
+// EmailAuthAnalyzer defines the interface for email authentication analysis
+type EmailAuthAnalyzer interface {
+	// Analyze performs email authentication analysis on the given domain
+	Analyze(ctx context.Context, domain string) (any, []IndicatorMatch, error)
+}
+
+// RDAPAnalyzer defines the interface for RDAP domain registration analysis
+type RDAPAnalyzer interface {
+	// Analyze performs RDAP domain registration analysis on the given domain
+	Analyze(ctx context.Context, domain string) (any, []IndicatorMatch, error)
+}
 
 // Manager coordinates downloading feeds, storing indicators, and serving lookups
 type Manager struct {
@@ -70,6 +95,10 @@ type Manager struct {
 	resolver *net.Resolver
 	// dnsCache is the TTL cache for DNS lookup results
 	dnsCache *dnsCache
+	// emailAuthAnalyzer is the optional email authentication analyzer
+	emailAuthAnalyzer EmailAuthAnalyzer
+	// rdapAnalyzer is the optional RDAP domain registration analyzer
+	rdapAnalyzer RDAPAnalyzer
 }
 
 // Option configures the Manager
@@ -116,6 +145,24 @@ func WithDNSCacheTTL(ttl time.Duration) Option {
 	return func(m *Manager) {
 		if ttl > 0 {
 			m.dnsCache = newDNSCache(ttl)
+		}
+	}
+}
+
+// WithEmailAuthAnalyzer injects an email authentication analyzer into the Manager
+func WithEmailAuthAnalyzer(a EmailAuthAnalyzer) Option {
+	return func(m *Manager) {
+		if a != nil {
+			m.emailAuthAnalyzer = a
+		}
+	}
+}
+
+// WithRDAPAnalyzer injects an RDAP domain registration analyzer into the Manager
+func WithRDAPAnalyzer(a RDAPAnalyzer) Option {
+	return func(m *Manager) {
+		if a != nil {
+			m.rdapAnalyzer = a
 		}
 	}
 }
@@ -466,6 +513,48 @@ func (m *Manager) Check(ctx context.Context, req CheckRequest) (ScoreResult, err
 		}
 	}
 
+	// Determine the domain to use for analyzer lookups
+	analyzerDomain := strings.ToLower(strings.TrimSpace(result.Domain))
+	if analyzerDomain == "" && result.Email != "" {
+		if at := strings.LastIndex(strings.ToLower(result.Email), "@"); at > 0 {
+			analyzerDomain = strings.ToLower(result.Email[at+1:])
+		}
+	}
+
+	if analyzerDomain != "" {
+		if m.emailAuthAnalyzer != nil {
+			emailAuthResult, emailAuthMatches, err := m.emailAuthAnalyzer.Analyze(ctx, analyzerDomain)
+			if err != nil {
+				issues = append(issues, fmt.Sprintf("email auth analysis for %s: %v", analyzerDomain, err))
+			} else {
+				result.EmailAuth = emailAuthResult
+				for _, match := range emailAuthMatches {
+					key := matchKey(match)
+					if _, exists := seen[key]; !exists {
+						seen[key] = struct{}{}
+						matches = append(matches, match)
+					}
+				}
+			}
+		}
+
+		if m.rdapAnalyzer != nil {
+			rdapResult, rdapMatches, err := m.rdapAnalyzer.Analyze(ctx, analyzerDomain)
+			if err != nil {
+				issues = append(issues, fmt.Sprintf("RDAP analysis for %s: %v", analyzerDomain, err))
+			} else {
+				result.DomainRegistration = rdapResult
+				for _, match := range rdapMatches {
+					key := matchKey(match)
+					if _, exists := seen[key]; !exists {
+						seen[key] = struct{}{}
+						matches = append(matches, match)
+					}
+				}
+			}
+		}
+	}
+
 	score, breakdown := calculateScore(matches)
 
 	// Ensure deterministic ordering for response
@@ -560,6 +649,24 @@ func categoryWeight(cat string) int {
 		return weightBruteforce
 	case "dc":
 		return weightDC
+	case "missing_spf":
+		return weightMissingSPF
+	case "weak_spf":
+		return weightWeakSPF
+	case "missing_dmarc":
+		return weightMissingDMARC
+	case "weak_dmarc":
+		return weightWeakDMARC
+	case "missing_dkim":
+		return weightMissingDKIM
+	case "new_domain_7d":
+		return weightNewDomain7d
+	case "new_domain_30d":
+		return weightNewDomain30d
+	case "new_domain_90d":
+		return weightNewDomain90d
+	case "new_domain_365d":
+		return weightNewDomain365d
 	default:
 		return weightDefault
 	}
@@ -656,7 +763,20 @@ func calculateRiskFlags(categories []string) RiskFlags {
 		IsPhishing:        lo.Contains(lower, "phishing"),
 		IsMalware:         lo.Contains(lower, "malware"),
 		IsBruteforce:      lo.Contains(lower, "bruteforce"),
+		IsNewDomain:       containsAny(lower, "new_domain_7d", "new_domain_30d", "new_domain_90d", "new_domain_365d"),
+		IsWeakEmailAuth:   containsAny(lower, "missing_spf", "weak_spf", "missing_dmarc", "weak_dmarc", "missing_dkim"),
 	}
+}
+
+// containsAny returns true if the slice contains any of the provided values
+func containsAny(slice []string, values ...string) bool {
+	for _, v := range values {
+		if lo.Contains(slice, v) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // buildReasons creates human-readable reasons for the score
@@ -679,18 +799,27 @@ func buildReasons(matches []IndicatorMatch, breakdown []CategoryWeight) []string
 	}
 
 	categoryDescriptions := map[string]string{
-		"c2":         "Command and control infrastructure",
-		"bot":        "Botnet or malicious bot activity",
-		"suspicious": "Suspicious or malicious activity",
-		"tor":        "Tor network usage",
-		"vpn":        "VPN service usage",
-		"proxy":      "Proxy service usage",
-		"bruteforce": "Brute force attack source",
-		"spam":       "Spam or unsolicited messaging",
-		"phishing":   "Phishing or credential theft",
-		"malware":    "Malware distribution or infection",
-		"disposable": "Disposable or temporary email service",
-		"dc":         "Datacenter or hosting provider",
+		"c2":              "Command and control infrastructure",
+		"bot":             "Botnet or malicious bot activity",
+		"suspicious":      "Suspicious or malicious activity",
+		"tor":             "Tor network usage",
+		"vpn":             "VPN service usage",
+		"proxy":           "Proxy service usage",
+		"bruteforce":      "Brute force attack source",
+		"spam":            "Spam or unsolicited messaging",
+		"phishing":        "Phishing or credential theft",
+		"malware":         "Malware distribution or infection",
+		"disposable":      "Disposable or temporary email service",
+		"dc":              "Datacenter or hosting provider",
+		"missing_spf":     "No SPF record configured",
+		"weak_spf":        "SPF policy is too permissive",
+		"missing_dmarc":   "No DMARC record configured",
+		"weak_dmarc":      "DMARC policy set to none (monitoring only)",
+		"missing_dkim":    "No DKIM signing detected",
+		"new_domain_7d":   "Domain registered within the last 7 days",
+		"new_domain_30d":  "Domain registered within the last 30 days",
+		"new_domain_90d":  "Domain registered within the last 90 days",
+		"new_domain_365d": "Domain registered within the last year",
 	}
 
 	for _, cw := range breakdown {

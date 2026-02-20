@@ -21,11 +21,9 @@ const (
 	// defaultHTTPRetries is the default number of HTTP retry attempts.
 	defaultHTTPRetries = 2
 	// defaultNucleiTimeout is the default timeout for nuclei scans.
-	defaultNucleiTimeout = 90 * time.Second
+	defaultNucleiTimeout = 5 * time.Minute
 	// defaultMaxConcurrency is the default cap on concurrent operations.
 	defaultMaxConcurrency = 50
-	// defaultNucleiPath is the default nuclei executable path.
-	defaultNucleiPath = "nuclei"
 	// defaultMaxSubdomainTakeoverChecks is the upper bound on takeover checks per scan.
 	defaultMaxSubdomainTakeoverChecks = 20
 )
@@ -50,8 +48,6 @@ type ScanOptions struct {
 	HTTPThreads int
 	// HTTPRetries is the number of HTTP retry attempts.
 	HTTPRetries int
-	// NucleiPath is the executable path for nuclei.
-	NucleiPath string
 	// NucleiTemplates is the list of nuclei template categories to scan with.
 	NucleiTemplates []string
 	// NucleiSeverity is the list of nuclei severity levels to include.
@@ -87,9 +83,8 @@ func DefaultScanOptions() *ScanOptions {
 		HTTPTimeout:                  defaultHTTPTimeout,
 		HTTPThreads:                  defaultHTTPThreads,
 		HTTPRetries:                  defaultHTTPRetries,
-		NucleiPath:                   defaultNucleiPath,
-		NucleiTemplates:              []string{"cves", "exposed-panels", "technologies", "misconfiguration"},
-		NucleiSeverity:               []string{"critical", "high", "medium"},
+		NucleiTemplates:              []string{"misconfig", "exposure"},
+		NucleiSeverity:               []string{"critical", "high"},
 		NucleiTimeout:                defaultNucleiTimeout,
 		Verbose:                      false,
 		Silent:                       true,
@@ -194,15 +189,6 @@ func WithHTTPThreads(threads int) ScanOption {
 	return func(o *ScanOptions) {
 		if threads > 0 {
 			o.HTTPThreads = threads
-		}
-	}
-}
-
-// WithNucleiPath sets the nuclei executable path.
-func WithNucleiPath(path string) ScanOption {
-	return func(o *ScanOptions) {
-		if path != "" {
-			o.NucleiPath = path
 		}
 	}
 }

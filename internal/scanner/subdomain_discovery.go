@@ -3,14 +3,19 @@ package scanner
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/projectdiscovery/goflags"
 	subfinderrunner "github.com/projectdiscovery/subfinder/v2/pkg/runner"
+	"github.com/rs/zerolog/log"
 
 	"github.com/theopenlane/sleuth/internal/types"
 )
@@ -40,6 +45,18 @@ func (s *Scanner) performSubdomainDiscovery(ctx context.Context, domain string) 
 	}
 
 	discoveredSubdomains := parseDiscoveredSubdomains(buf.String())
+
+	// Active probing of common prefixes that passive sources may miss
+	alreadyFound := make(map[string]struct{}, len(discoveredSubdomains))
+	for _, sub := range discoveredSubdomains {
+		alreadyFound[sub] = struct{}{}
+	}
+
+	activelyFound := s.probeCommonSubdomains(ctx, domain, alreadyFound)
+	discoveredSubdomains = append(discoveredSubdomains, activelyFound...)
+	sort.Strings(discoveredSubdomains)
+	log.Info().Str("domain", domain).Int("passive", len(alreadyFound)).Int("active", len(activelyFound)).Msg("subdomain probing complete")
+
 	if limit := s.options.MaxSubdomains; limit > 0 && len(discoveredSubdomains) > limit {
 		discoveredSubdomains = discoveredSubdomains[:limit]
 	}
@@ -58,9 +75,50 @@ func (s *Scanner) performSubdomainDiscovery(ctx context.Context, domain string) 
 		}
 	}
 
+	// Build context map for HTTP probing
+	interestingContextMap := make(map[string]string, len(interesting))
+	for _, sub := range interesting {
+		subOnly := strings.TrimSuffix(sub, "."+domain)
+		if ctxText, ok := s.interestingSubdomainContext(subOnly); ok {
+			interestingContextMap[sub] = ctxText
+		}
+	}
+
+	// HTTP-probe interesting subdomains for liveness and page titles
+	var interestingDetails []InterestingSubdomainInfo
+	if len(interesting) > 0 {
+		interestingDetails = s.probeInterestingSubdomains(ctx, interesting, interestingContextMap)
+		log.Info().Str("domain", domain).Int("probed", len(interesting)).Int("live", countLiveSubdomains(interestingDetails)).Msg("interesting subdomain probing complete")
+	}
+
 	result.Metadata["total_subdomains"] = len(discoveredSubdomains)
 	result.Metadata["subdomains"] = discoveredSubdomains
 	result.Metadata["interesting_subdomains"] = interesting
+
+	if len(interestingDetails) > 0 {
+		result.Metadata["interesting_subdomain_details"] = interestingDetails
+
+		// Update existing interesting_subdomain findings with HTTP status
+		for i := range result.Findings {
+			if result.Findings[i].Type != "interesting_subdomain" {
+				continue
+			}
+
+			for _, detail := range interestingDetails {
+				if !strings.Contains(result.Findings[i].Description, detail.Subdomain) {
+					continue
+				}
+
+				if detail.Live {
+					result.Findings[i].Details = fmt.Sprintf("%s (HTTP %d — %s)", result.Findings[i].Details, detail.StatusCode, detail.URL)
+				} else {
+					result.Findings[i].Details = fmt.Sprintf("%s (not responding to HTTP)", result.Findings[i].Details)
+				}
+
+				break
+			}
+		}
+	}
 
 	if len(discoveredSubdomains) > 0 {
 		result.Findings = append(result.Findings, types.Finding{
@@ -116,6 +174,197 @@ func (s *Scanner) interestingSubdomainContext(subdomain string) (string, bool) {
 	}
 
 	return "", false
+}
+
+// probeCommonSubdomains actively resolves common subdomain prefixes via DNS
+// to discover subdomains that passive OSINT sources may have missed.
+func (s *Scanner) probeCommonSubdomains(ctx context.Context, domain string, alreadyFound map[string]struct{}) []string {
+	var (
+		mu    sync.Mutex
+		found []string
+		wg    sync.WaitGroup
+	)
+
+	workers := s.options.HTTPThreads
+	if workers <= 0 {
+		workers = 1
+	}
+
+	sem := make(chan struct{}, workers)
+	resolver := net.DefaultResolver
+
+	for _, prefix := range s.options.InterestingSubdomainPatterns {
+		fqdn := fmt.Sprintf("%s.%s", prefix, domain)
+		if _, exists := alreadyFound[fqdn]; exists {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(subdomain string) {
+			defer wg.Done()
+
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
+
+			dnsCtx, cancel := s.withDNSTimeout(ctx)
+			defer cancel()
+
+			addrs, err := resolver.LookupHost(dnsCtx, subdomain)
+			if err != nil || len(addrs) == 0 {
+				return
+			}
+
+			mu.Lock()
+			found = append(found, subdomain)
+			mu.Unlock()
+		}(fqdn)
+	}
+
+	wg.Wait()
+
+	sort.Strings(found)
+
+	return found
+}
+
+// InterestingSubdomainInfo holds HTTP probe results for an interesting subdomain.
+type InterestingSubdomainInfo struct {
+	// Subdomain is the fully qualified subdomain name.
+	Subdomain string `json:"subdomain"`
+	// Context describes why this subdomain is interesting.
+	Context string `json:"context"`
+	// Live indicates whether the subdomain responded to an HTTP request.
+	Live bool `json:"live"`
+	// StatusCode is the HTTP status code returned, if live.
+	StatusCode int `json:"status_code,omitempty"`
+	// Title is the page title extracted from the HTML response, if live.
+	Title string `json:"title,omitempty"`
+	// URL is the final URL after following redirects, if live.
+	URL string `json:"url,omitempty"`
+}
+
+// maxTitleReadBytes caps how many bytes we read from the response body when extracting a title.
+const maxTitleReadBytes = 64 * 1024
+
+// titlePattern matches the HTML <title> tag content.
+var titlePattern = regexp.MustCompile(`(?i)<title[^>]*>([^<]+)</title>`)
+
+// probeInterestingSubdomains performs HTTP GET probes against interesting subdomains
+// to determine liveness, extract page titles, and capture final URLs.
+// The contextMap provides pre-resolved context descriptions keyed by subdomain FQDN.
+func (s *Scanner) probeInterestingSubdomains(ctx context.Context, subdomains []string, contextMap map[string]string) []InterestingSubdomainInfo {
+	var (
+		mu      sync.Mutex
+		results []InterestingSubdomainInfo
+		wg      sync.WaitGroup
+	)
+
+	workers := s.options.HTTPThreads
+	if workers <= 0 {
+		workers = 1
+	}
+
+	sem := make(chan struct{}, workers)
+
+	timeout := s.options.HTTPTimeout
+	if timeout <= 0 {
+		timeout = defaultHTTPTimeout
+	}
+
+	client := &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // probing unknown subdomains
+		},
+		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+			const maxRedirects = 10
+			if len(via) >= maxRedirects {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+
+	for _, subdomain := range subdomains {
+		contextText := contextMap[subdomain]
+
+		wg.Add(1)
+
+		go func(sub, ctxText string) {
+			defer wg.Done()
+
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
+
+			info := InterestingSubdomainInfo{
+				Subdomain: sub,
+				Context:   ctxText,
+			}
+
+			// Try HTTPS first, fall back to HTTP
+			for _, scheme := range []string{"https", "http"} {
+				probeURL := fmt.Sprintf("%s://%s", scheme, sub)
+
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
+				if err != nil {
+					continue
+				}
+
+				resp, err := client.Do(req)
+				if err != nil {
+					continue
+				}
+
+				info.Live = true
+				info.StatusCode = resp.StatusCode
+				info.URL = resp.Request.URL.String()
+
+				body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxTitleReadBytes))
+				resp.Body.Close()
+
+				if readErr == nil {
+					if match := titlePattern.FindSubmatch(body); len(match) > 1 {
+						info.Title = strings.TrimSpace(string(match[1]))
+					}
+				}
+
+				break
+			}
+
+			mu.Lock()
+			results = append(results, info)
+			mu.Unlock()
+		}(subdomain, contextText)
+	}
+
+	wg.Wait()
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Subdomain < results[j].Subdomain
+	})
+
+	return results
+}
+
+// countLiveSubdomains returns the number of probed subdomains that responded to HTTP.
+func countLiveSubdomains(details []InterestingSubdomainInfo) int {
+	count := 0
+	for _, d := range details {
+		if d.Live {
+			count++
+		}
+	}
+
+	return count
 }
 
 func (s *Scanner) takeoverWorkerCount(checkLimit int) int {

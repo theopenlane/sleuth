@@ -9,8 +9,15 @@ import (
 const (
 	// defaultBaseURL is the root endpoint for the Cloudflare API
 	defaultBaseURL = "https://api.cloudflare.com/client/v4"
-	// defaultRequestTimeout is the default timeout for Cloudflare API requests
-	defaultRequestTimeout = 30 * time.Second
+	// defaultRequestTimeout is the default timeout for Cloudflare API requests.
+	// Browser rendering with SPA wait (networkidle2) can take 30-45 seconds,
+	// so this must exceed the rendering time.
+	defaultRequestTimeout = 60 * time.Second
+	// browserNavigationTimeout is the Puppeteer-level navigation timeout in
+	// milliseconds, controlling how long the browser waits for the waitUntil
+	// condition (networkidle2). The default Puppeteer timeout is 30000ms which
+	// is too short for heavy SPAs like Drata trust centers.
+	browserNavigationTimeout = 45000
 )
 
 // Client provides access to Cloudflare APIs

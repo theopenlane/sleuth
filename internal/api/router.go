@@ -9,6 +9,7 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 
 	"github.com/theopenlane/sleuth/internal/cloudflare"
+	"github.com/theopenlane/sleuth/internal/compliance"
 	"github.com/theopenlane/sleuth/internal/intel"
 	"github.com/theopenlane/sleuth/internal/scanner"
 	"github.com/theopenlane/sleuth/internal/slack"
@@ -28,6 +29,8 @@ type RouterConfig struct {
 	IntelManager *intel.Manager
 	// Enricher provides domain enrichment via Cloudflare.
 	Enricher *cloudflare.Client
+	// Discoverer performs compliance page discovery and classification.
+	Discoverer compliance.Discoverer
 	// Notifier sends notifications to Slack.
 	Notifier *slack.Client
 	// MaxBodySize limits the size of incoming request bodies.
@@ -42,6 +45,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		scanner:     cfg.Scanner,
 		intel:       cfg.IntelManager,
 		enricher:    cfg.Enricher,
+		discoverer:  cfg.Discoverer,
 		notifier:    cfg.Notifier,
 		maxBodySize: cfg.MaxBodySize,
 		scanTimeout: cfg.ScanTimeout,
@@ -79,6 +83,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/health", h.handleHealth)
 		r.Post("/scan", h.handleScan)
 		r.Post("/enrich", h.handleEnrich)
+		r.Post("/compliance", h.handleComplianceDiscovery)
 
 		r.Route("/intel", func(r chi.Router) {
 			r.Post("/hydrate", h.handleIntelHydrate)

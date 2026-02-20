@@ -16,7 +16,11 @@ func TestRenderCompanyProfile_Success(t *testing.T) {
 		Products:      []string{"Widget Pro", "Widget Lite"},
 		Location:      "San Francisco, CA",
 		EmployeeRange: "51-200",
-		WebsiteTitle:  "Acme Corp - Enterprise Widgets",
+		FoundedYear:   "2015",
+		SocialLinks: SocialLinks{
+			LinkedIn: "https://linkedin.com/company/acme",
+			GitHub:   "https://github.com/acme",
+		},
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +44,18 @@ func TestRenderCompanyProfile_Success(t *testing.T) {
 
 		if reqBody.ResponseFormat.Type != "json_schema" {
 			t.Errorf("expected response format type json_schema, got %s", reqBody.ResponseFormat.Type)
+		}
+
+		if reqBody.GotoOptions == nil {
+			t.Fatal("expected gotoOptions to be set for SPA rendering")
+		}
+
+		if reqBody.GotoOptions.WaitUntil != "networkidle2" {
+			t.Errorf("expected gotoOptions.waitUntil=networkidle2, got %s", reqBody.GotoOptions.WaitUntil)
+		}
+
+		if reqBody.GotoOptions.Timeout != browserNavigationTimeout {
+			t.Errorf("expected gotoOptions.timeout=%d, got %d", browserNavigationTimeout, reqBody.GotoOptions.Timeout)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -96,8 +112,16 @@ func TestRenderCompanyProfile_Success(t *testing.T) {
 		t.Errorf("expected employee range %s, got %s", expected.EmployeeRange, result.EmployeeRange)
 	}
 
-	if result.WebsiteTitle != expected.WebsiteTitle {
-		t.Errorf("expected website title %s, got %s", expected.WebsiteTitle, result.WebsiteTitle)
+	if result.FoundedYear != expected.FoundedYear {
+		t.Errorf("expected founded year %s, got %s", expected.FoundedYear, result.FoundedYear)
+	}
+
+	if result.SocialLinks.LinkedIn != expected.SocialLinks.LinkedIn {
+		t.Errorf("expected linkedin %s, got %s", expected.SocialLinks.LinkedIn, result.SocialLinks.LinkedIn)
+	}
+
+	if result.SocialLinks.GitHub != expected.SocialLinks.GitHub {
+		t.Errorf("expected github %s, got %s", expected.SocialLinks.GitHub, result.SocialLinks.GitHub)
 	}
 }
 
@@ -163,7 +187,7 @@ func TestBuildCompanyProfileSchema(t *testing.T) {
 	}
 
 	props := schema.JSONSchema.Schema.Properties
-	expectedFields := []string{"name", "description", "industry", "products", "location", "employee_range", "website_title"}
+	expectedFields := []string{"name", "description", "industry", "products", "location", "employee_range", "founded_year", "estimated_revenue", "social_links", "technologies"}
 
 	for _, field := range expectedFields {
 		if _, ok := props[field]; !ok {

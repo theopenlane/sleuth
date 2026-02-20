@@ -122,10 +122,34 @@ tasks:
         curl -s -X POST -H "Content-Type: application/json" -d '{"domain":"{{.DOMAIN}}"}' http://localhost:8080/api/scan
       - docker stop sleuth-scan >/dev/null
 
+  service:start:
+    desc: Build and start the sleuth service in the background
+    cmds:
+      - task: go:build
+      - ./scripts/service_start.sh
+      - ./scripts/service_wait.sh
+
+  service:stop:
+    desc: Stop the background sleuth service
+    cmds:
+      - ./scripts/service_stop.sh
+
+  service:logs:
+    desc: Tail the background sleuth service logs
+    cmds:
+      - tail -f .tasktmp/sleuth.log
+
+  ui:
+    desc: Rebuild, restart the service, and open the UI in a browser
+    cmds:
+      - task: service:stop
+      - task: service:start
+      - open http://localhost:17710/ui
+
   call:health:
     desc: Call the health endpoint
     cmds:
-      - curl -s http://localhost:8080/api/health | jq
+      - curl -s http://localhost:17710/api/health | jq
 
   call:scan:
     desc: Submit a domain or email to /api/scan
@@ -159,6 +183,30 @@ tasks:
     cmds:
       - cmd: >
           ./scripts/intel_check.sh{{if .DOMAIN}} --domain "{{.DOMAIN}}"{{end}}{{if .EMAIL}} --email "{{.EMAIL}}"{{end}}{{if .TYPES}} --types "{{.TYPES}}"{{end}} --resolve-ips "{{.RESOLVE_IPS}}" #magic___^_^___line
+  call:compliance:
+    desc: Discover compliance pages for a domain or email
+    vars:
+      DOMAIN: '{{default "" .DOMAIN}}'
+      EMAIL: '{{default "" .EMAIL}}'
+      PORT: '{{default "17710" .PORT}}'
+    cmds:
+      - cmd: >
+          curl -s -X POST -H "Content-Type: application/json" -d '{"domain":"{{.DOMAIN}}", "email":"{{.EMAIL}}"}' http://localhost:{{.PORT}}/api/compliance | jq
+  call:all:
+    desc: Run health, scan, enrich, and compliance against a domain
+    vars:
+      DOMAIN: '{{default "theopenlane.io" .DOMAIN}}'
+      PORT: '{{default "17710" .PORT}}'
+    cmds:
+      - echo "--- Health ---"
+      - curl -s http://localhost:{{.PORT}}/api/health | jq
+      - echo ""
+      - echo "--- Scan ---"
+      - curl -s -X POST -H "Content-Type:application/json" -d '{"domain":"{{.DOMAIN}}"}' http://localhost:{{.PORT}}/api/scan | jq
+      - echo ""
+      - echo "--- Compliance ---"
+      - curl -s -X POST -H "Content-Type:application/json" -d '{"domain":"{{.DOMAIN}}"}' http://localhost:{{.PORT}}/api/compliance | jq
+
   precommit-full:
     desc: Lint the project against all files
     cmds:

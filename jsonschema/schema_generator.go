@@ -73,7 +73,7 @@ func buildDefaultConfig() *config.Config {
 	defaults.SetDefaults(cfg)
 
 	if len(cfg.Scanner.NucleiSeverity) == 0 {
-		cfg.Scanner.NucleiSeverity = []string{"critical", "high", "medium"}
+		cfg.Scanner.NucleiSeverity = []string{"critical", "high", "medium", "low", "info"}
 	}
 
 	return cfg

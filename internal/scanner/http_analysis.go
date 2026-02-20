@@ -90,7 +90,6 @@ func (s *Scanner) performHTTPAnalysis(ctx context.Context, domain string) *types
 	if readErr == nil {
 		body := string(bodyBytes)
 		s.analyzeResponseBody(body, result)
-		s.detectTechnologies(body, resp.Header, result)
 	}
 
 	return result

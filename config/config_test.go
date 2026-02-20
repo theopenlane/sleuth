@@ -33,8 +33,8 @@ func TestNew(t *testing.T) {
 		t.Errorf("expected default max body size 102400, got %d", cfg.Server.MaxBodySize)
 	}
 
-	if len(cfg.Scanner.NucleiSeverity) != 3 {
-		t.Errorf("expected 3 default nuclei severity levels, got %d", len(cfg.Scanner.NucleiSeverity))
+	if len(cfg.Scanner.NucleiSeverity) != 5 {
+		t.Errorf("expected 5 default nuclei severity levels, got %d", len(cfg.Scanner.NucleiSeverity))
 	}
 
 	if cfg.Intel.FeedConfig != "config/feed_config.json" {

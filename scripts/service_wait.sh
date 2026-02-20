@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-URL="${1:-http://localhost:8080/api/health}"
+URL="${1:-http://localhost:17710/api/health}"
 RETRIES="${2:-20}"
 SLEEP_SECONDS="${3:-1}"
 

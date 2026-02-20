@@ -23,4 +23,6 @@ var (
 	ErrEnricherNotConfigured = errors.New("domain enrichment not configured")
 	// ErrDomainRequired is returned when no domain or email is provided for enrichment
 	ErrDomainRequired = errors.New("domain or email required for enrichment")
+	// ErrComplianceDiscoveryFailed is returned when compliance page discovery encounters a fatal error
+	ErrComplianceDiscoveryFailed = errors.New("compliance discovery failed")
 )

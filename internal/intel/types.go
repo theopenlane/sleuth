@@ -129,6 +129,10 @@ type ScoreResult struct {
 	Issues []string `json:"issues,omitempty"`
 	// Summary provides aggregated feed and category context for the lookup
 	Summary ScoreSummary `json:"summary"`
+	// EmailAuth holds email authentication analysis metadata when available
+	EmailAuth any `json:"email_auth,omitempty"`
+	// DomainRegistration holds RDAP domain registration metadata when available
+	DomainRegistration any `json:"domain_registration,omitempty"`
 }
 
 // RiskFlags provides boolean indicators for common risk categories
@@ -153,6 +157,10 @@ type RiskFlags struct {
 	IsMalware bool `json:"is_malware"`
 	// IsBruteforce indicates the indicator is associated with brute force attack activity
 	IsBruteforce bool `json:"is_bruteforce"`
+	// IsNewDomain indicates the domain was registered recently
+	IsNewDomain bool `json:"is_new_domain"`
+	// IsWeakEmailAuth indicates the domain has weak or missing email authentication
+	IsWeakEmailAuth bool `json:"is_weak_email_auth"`
 }
 
 // CategoryWeight records how much each category contributed to the final score

@@ -12,7 +12,10 @@ import (
 	"github.com/theopenlane/sleuth/config"
 	"github.com/theopenlane/sleuth/internal/api"
 	"github.com/theopenlane/sleuth/internal/cloudflare"
+	"github.com/theopenlane/sleuth/internal/compliance"
+	"github.com/theopenlane/sleuth/internal/emailauth"
 	"github.com/theopenlane/sleuth/internal/intel"
+	"github.com/theopenlane/sleuth/internal/rdap"
 	"github.com/theopenlane/sleuth/internal/scanner"
 	"github.com/theopenlane/sleuth/internal/slack"
 )
@@ -59,11 +62,13 @@ func serve(ctx context.Context) error {
 
 	cfClient := setupCloudflare(cfg)
 	slackClient := setupSlack(cfg)
+	discoverer := setupComplianceDiscoverer()
 
 	handler := api.NewRouter(api.RouterConfig{
 		Scanner:      s,
 		IntelManager: intelManager,
 		Enricher:     cfClient,
+		Discoverer:   discoverer,
 		Notifier:     slackClient,
 		MaxBodySize:  cfg.Server.MaxBodySize,
 		ScanTimeout:  cfg.Scanner.Timeout,
@@ -105,12 +110,17 @@ func setupIntel(ctx context.Context, cfg *config.Config) (*intel.Manager, error)
 
 	intelClient := &http.Client{Timeout: cfg.Intel.RequestTimeout}
 
+	emailAuthAnalyzer := emailauth.NewAnalyzer()
+	rdapClient := rdap.NewClient()
+
 	manager, err := intel.NewManager(
 		feedCfg,
 		intel.WithStorageDir(cfg.Intel.StorageDir),
 		intel.WithHTTPClient(intelClient),
 		intel.WithResolverTimeout(cfg.Intel.ResolverTimeout),
 		intel.WithDNSCacheTTL(cfg.Intel.DNSCacheTTL),
+		intel.WithEmailAuthAnalyzer(emailAuthAnalyzer),
+		intel.WithRDAPAnalyzer(rdapClient),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("initializing intel manager: %w", err)
@@ -149,6 +159,8 @@ func setupScanner(cfg *config.Config) (*scanner.Scanner, error) {
 
 // setupCloudflare initializes the Cloudflare client from config, returning nil when unconfigured
 func setupCloudflare(cfg *config.Config) *cloudflare.Client {
+	log.Info().Int("account_id_len", len(cfg.Cloudflare.AccountID)).Bool("api_token_set", cfg.Cloudflare.APIToken != "").Msg("cloudflare config check")
+
 	if cfg.Cloudflare.AccountID == "" || cfg.Cloudflare.APIToken == "" {
 		log.Info().Msg("cloudflare enrichment not configured, skipping")
 		return nil
@@ -167,6 +179,13 @@ func setupCloudflare(cfg *config.Config) *cloudflare.Client {
 	log.Info().Msg("cloudflare enrichment configured")
 
 	return client
+}
+
+// setupComplianceDiscoverer initializes the httpx-based compliance page discoverer
+func setupComplianceDiscoverer() compliance.Discoverer {
+	log.Info().Msg("compliance discoverer configured")
+
+	return compliance.NewHTTPXDiscoverer()
 }
 
 // setupSlack initializes the Slack webhook client from config, returning nil when unconfigured

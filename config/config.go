@@ -106,7 +106,7 @@ func New(opts ...Option) *Config {
 
 	// set default nuclei severity since go-defaults does not handle slices
 	if len(cfg.Scanner.NucleiSeverity) == 0 {
-		cfg.Scanner.NucleiSeverity = []string{"critical", "high", "medium"}
+		cfg.Scanner.NucleiSeverity = []string{"critical", "high", "medium", "low", "info"}
 	}
 
 	for _, opt := range opts {

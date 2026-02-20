@@ -42,3 +42,4 @@ Thumbs.db
 .tasktmp/
 .claude
 *.config*yaml
+config/.config.yaml

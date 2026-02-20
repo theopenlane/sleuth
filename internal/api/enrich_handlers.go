@@ -154,6 +154,14 @@ func buildEnrichmentSlackMessage(domain, email string, profile cloudflare.Compan
 		fields = append(fields, slack.TextObject{Type: "mrkdwn", Text: fmt.Sprintf("*Employees:*\n%s", profile.EmployeeRange)})
 	}
 
+	if profile.FoundedYear != "" {
+		fields = append(fields, slack.TextObject{Type: "mrkdwn", Text: fmt.Sprintf("*Founded:*\n%s", profile.FoundedYear)})
+	}
+
+	if profile.EstimatedRevenue != "" {
+		fields = append(fields, slack.TextObject{Type: "mrkdwn", Text: fmt.Sprintf("*Revenue:*\n%s", profile.EstimatedRevenue)})
+	}
+
 	if email != "" {
 		fields = append(fields, slack.TextObject{Type: "mrkdwn", Text: fmt.Sprintf("*Signup Email:*\n%s", email)})
 	}

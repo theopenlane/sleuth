@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 
 	miekgdns "github.com/miekg/dns"
@@ -11,6 +12,38 @@ import (
 
 	"github.com/theopenlane/sleuth/internal/types"
 )
+
+// verificationServiceMap maps TXT record key prefixes to the service they confirm usage of
+var verificationServiceMap = map[string]string{
+	"google-site-verification":       "Google Workspace",
+	"facebook-domain-verification":   "Facebook / Meta",
+	"apple-domain-verification":      "Apple",
+	"slack-domain-verification":      "Slack",
+	"hubspot-domain-verification":    "HubSpot",
+	"atlassian-domain-verification":  "Atlassian",
+	"docusign":                       "DocuSign",
+	"stripe-verification":            "Stripe",
+	"zoom-domain-verification":       "Zoom",
+	"miro-verification":              "Miro",
+	"ms":                             "Microsoft 365",
+	"webexdomainverification":        "Cisco Webex",
+	"have-i-been-pwned-verification": "Have I Been Pwned",
+	"adobe-idp-site-verification":    "Adobe",
+	"cloudflare-domain-verification": "Cloudflare",
+	"brevo-code":                     "Brevo",
+	"intercom-verification":          "Intercom",
+	"pinterest-site-verification":    "Pinterest",
+	"duo_sso_verification":           "Duo Security",
+	"1password-site-verification":    "1Password",
+	"knowbe4-site-verification":      "KnowBe4",
+	"calendly-site-verification":     "Calendly",
+	"postman-domain-verification":    "Postman",
+	"logmein-verification-code":      "LogMeIn",
+	"onetrust-domain-verification":   "OneTrust",
+	"sophos-domain-verification":     "Sophos",
+	"drift-domain-verification":      "Drift",
+	"yandex-verification":            "Yandex",
+}
 
 // performDNSAnalysis performs comprehensive DNS analysis using dnsx library.
 func (s *Scanner) performDNSAnalysis(ctx context.Context, domain string) *types.CheckResult {
@@ -250,19 +283,10 @@ func (s *Scanner) analyzeTXTRecords(txtRecords []string, result *types.CheckResu
 			result.Metadata["dmarc"] = txt
 		}
 
-		if strings.Contains(lower, "verification=") ||
-			strings.Contains(lower, "google-site-verification=") ||
-			strings.Contains(lower, "facebook-domain-verification=") ||
-			strings.Contains(lower, "ms=") ||
-			strings.Contains(lower, "apple-domain-verification=") {
-			result.Findings = append(result.Findings, types.Finding{
-				Severity:    "info",
-				Type:        "domain_verification",
-				Description: "Domain verification record found",
-				Details:     txt,
-			})
-		}
+		s.detectVerificationServices(lower, txt, result)
 	}
+
+	s.finalizeDetectedServices(result)
 
 	if !hasSPF {
 		result.Findings = append(result.Findings, types.Finding{
@@ -272,4 +296,70 @@ func (s *Scanner) analyzeTXTRecords(txtRecords []string, result *types.CheckResu
 			Details:     "SPF helps prevent email spoofing",
 		})
 	}
+}
+
+// detectVerificationServices checks a TXT record against known domain verification prefixes
+// and emits both a domain_verification finding and a service_detection finding when matched.
+func (s *Scanner) detectVerificationServices(lower, original string, result *types.CheckResult) {
+	for prefix, service := range verificationServiceMap {
+		if !strings.HasPrefix(lower, prefix+"=") && !strings.HasPrefix(lower, prefix+":") {
+			continue
+		}
+
+		result.Findings = append(result.Findings, types.Finding{
+			Severity:    "info",
+			Type:        "domain_verification",
+			Description: "Domain verification record found",
+			Details:     original,
+		})
+
+		// Track detected services for dedup and metadata aggregation
+		serviceSet, _ := result.Metadata["_service_set"].(map[string]struct{})
+		if serviceSet == nil {
+			serviceSet = make(map[string]struct{})
+		}
+
+		if _, exists := serviceSet[service]; !exists {
+			serviceSet[service] = struct{}{}
+			result.Metadata["_service_set"] = serviceSet
+
+			result.Findings = append(result.Findings, types.Finding{
+				Severity:    "info",
+				Type:        "service_detection",
+				Description: fmt.Sprintf("Service: %s", service),
+				Details:     fmt.Sprintf("Domain verification TXT record confirms usage of %s", service),
+			})
+		}
+
+		return
+	}
+
+	// Generic verification record that didn't match a known service
+	if strings.Contains(lower, "verification=") || strings.Contains(lower, "verify=") {
+		result.Findings = append(result.Findings, types.Finding{
+			Severity:    "info",
+			Type:        "domain_verification",
+			Description: "Domain verification record found",
+			Details:     original,
+		})
+	}
+}
+
+// finalizeDetectedServices converts the internal service set to a sorted metadata list
+// and removes the temporary working set.
+func (s *Scanner) finalizeDetectedServices(result *types.CheckResult) {
+	serviceSet, _ := result.Metadata["_service_set"].(map[string]struct{})
+	delete(result.Metadata, "_service_set")
+
+	if len(serviceSet) == 0 {
+		return
+	}
+
+	services := make([]string, 0, len(serviceSet))
+	for svc := range serviceSet {
+		services = append(services, svc)
+	}
+
+	sort.Strings(services)
+	result.Metadata["detected_services"] = services
 }

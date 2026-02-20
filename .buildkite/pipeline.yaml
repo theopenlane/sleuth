@@ -6,10 +6,13 @@ env:
   GOCACHE: $HOME/.cache/go-build
   GOMODCACHE: $HOME/.cache/go/pkg/mod
   GOLANGCI_LINT_CACHE: $HOME/.cache/golangci-lint
+  HELM_CHART_REPO: git@github.com:theopenlane/openlane-infra.git
+  HELM_CHART_PATH: charts/sleuth
 
 secrets:
   - GITHUB_TOKEN
   - SECRET_GHCR_PUBLISH_TOKEN
+  - GITHUB_SSH_PRIVATE_KEY
 
 steps:
   - group: ":golangci-lint: Linter"
@@ -132,3 +135,26 @@ steps:
           - theopenlane/container-build#v1.1.1:
               dockerfile: Dockerfile
               push: true
+  - group: ":helm: Chart Update"
+    depends_on: "docker-build"
+    key: "chart-update"
+    steps:
+      - label: ":rocket: update image tag for release"
+        key: "image_tag_automation"
+        depends_on: "docker-build-and-tag"
+        if: build.tag != null
+        plugins:
+          - docker#v5.13.0:
+              image: "ghcr.io/theopenlane/build-image:latest"
+              always-pull: true
+              command: ["sh", "-c", "apk add --no-cache bash >/dev/null 2>&1 && bash .buildkite/image-tag-automation.sh"]
+              propagate-environment: true
+              volumes:
+                - "$GOCACHE:$GOCACHE"
+                - "$GOMODCACHE:$GOMODCACHE"
+              environment:
+                - "GITHUB_TOKEN"
+                - "GITHUB_SSH_PRIVATE_KEY"
+                - "HELM_CHART_REPO"
+                - "HELM_CHART_PATH"
+                - "BUILDKITE_BUILD_CHECKOUT_PATH=/workdir"
