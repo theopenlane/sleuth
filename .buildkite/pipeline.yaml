@@ -89,9 +89,7 @@ steps:
           chmod +x bin/${APP_NAME}
         plugins:
           - artifacts#v1.9.4:
-              download:
-                - from: "bin/${APP_NAME}"
-                  to: "bin/${APP_NAME}"
+              download: "bin/${APP_NAME}"
               step: "gobuild"
           - docker-login#v3.0.0:
               username: openlane-bender
@@ -118,9 +116,7 @@ steps:
           chmod +x bin/${APP_NAME}
         plugins:
           - artifacts#v1.9.4:
-              download:
-                - from: "bin/${APP_NAME}"
-                  to: "bin/${APP_NAME}"
+              download: "bin/${APP_NAME}"
               step: "gobuild"
           - docker-login#v3.0.0:
               username: openlane-bender
