@@ -103,7 +103,7 @@ steps:
           - theopenlane/container-build#v1.1.1:
               dockerfile: Dockerfile
               push: false
-          - equinixmetal-buildkite/trivy#v1.19.0:
+          - equinixmetal-buildkite/trivy#v1.20.0:
               severity: CRITICAL,HIGH
               ignore-unfixed: true
               scanners: misconfig,secret,vuln
