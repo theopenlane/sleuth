@@ -896,6 +896,8 @@ github.com/projectdiscovery/blackrock v0.0.1 h1:lHQqhaaEFjgf5WkuItbpeCZv2DUIE45k
 github.com/projectdiscovery/blackrock v0.0.1/go.mod h1:ANUtjDfaVrqB453bzToU+YB4cUbvBRpLvEwoWIwlTss=
 github.com/projectdiscovery/cdncheck v1.2.23 h1:PTXUEG3fJYuBSdi+7O76V/dQYd14TLn84lVABGMNhuU=
 github.com/projectdiscovery/cdncheck v1.2.23/go.mod h1:Y1KQmACY+AifbuPX/W7o8lWssiWmAZ5d/KG8qkmFm9I=
+github.com/projectdiscovery/cdncheck v1.2.24 h1:S+WMy2hQMpiX3TiRtngyrOy58fTKde+VGz2dF41o8tk=
+github.com/projectdiscovery/cdncheck v1.2.24/go.mod h1:Y1KQmACY+AifbuPX/W7o8lWssiWmAZ5d/KG8qkmFm9I=
 github.com/projectdiscovery/chaos-client v0.5.2 h1:dN+7GXEypsJAbCD//dBcUxzAEAEH1fjc/7Rf4F/RiNU=
 github.com/projectdiscovery/chaos-client v0.5.2/go.mod h1:KnoJ/NJPhll42uaqlDga6oafFfNw5l2XI2ajRijtDuU=
 github.com/projectdiscovery/clistats v0.1.1 h1:8mwbdbwTU4aT88TJvwIzTpiNeow3XnAB72JIg66c8wE=

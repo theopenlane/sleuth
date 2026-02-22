@@ -18,7 +18,7 @@ require (
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/miekg/dns v1.1.72
 	github.com/openrdap/rdap v0.9.1
-	github.com/projectdiscovery/cdncheck v1.2.23
+	github.com/projectdiscovery/cdncheck v1.2.24
 	github.com/projectdiscovery/dnsx v1.2.3
 	github.com/projectdiscovery/goflags v0.1.74
 	github.com/projectdiscovery/httpx v1.8.1
