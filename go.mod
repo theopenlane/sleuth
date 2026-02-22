@@ -25,7 +25,7 @@ require (
 	github.com/projectdiscovery/nuclei/v3 v3.7.0
 	github.com/projectdiscovery/subfinder/v2 v2.12.0
 	github.com/projectdiscovery/tlsx v1.2.2
-	github.com/projectdiscovery/wappalyzergo v0.2.68
+	github.com/projectdiscovery/wappalyzergo v0.2.69
 	github.com/rs/zerolog v1.34.0
 	github.com/samber/lo v1.52.0
 	github.com/spf13/cobra v1.10.2
